@@ -4,77 +4,49 @@
  * -------------------------------------------------------------------------------------------- */
 import { updateMediaStreamTracks } from '../../helpers/webrtc'
 import { CoreContext } from '../context'
-import { SDK } from '../namespaces'
-import { webrtcManager } from '../webrtc'
-import { Source, SourceDeclaration } from '../../compositor/sources'
-import decode from 'jwt-decode'
+import { Compositor, SDK } from '../namespaces'
 
-export const joinRoom = async (
-  token: string,
-  settings: {
+type SourceDeclaration = Compositor.Source.SourceDeclaration
+
+export type RoomParticipantSource = {
+  // Equivalent to room participantId
+  id: string
+  value: MediaStream
+  props: {
+    // Equivalent to room participantId
+    id: string
+    type: 'screen' | 'camera'
     displayName: string
-  },
-) => {
-  const tokenData = decode(token) as any
-  const roomName = tokenData.video.room
-  const url = new URL(CoreContext.clients.getLiveKitServer())
-  const baseUrl = url.host + url.pathname
-  const roomContext = webrtcManager.ensureRoom(baseUrl, roomName, token)
-  roomContext.bindApiClient(CoreContext.clients)
-  await roomContext.connect()
-  return roomName
+    // Video track muted by owner
+    videoEnabled: boolean
+    // Audio track muted by owner
+    audioEnabled: boolean
+    // Is Video mirrored
+    mirrored: boolean
+  }
 }
-
-type Props = {
-  participantId: string
-  type: 'screen' | 'camera'
-  displayName?: string
-  // Video track muted by owner
-  videoEnabled: boolean
-  // Audio track muted by owner
-  audioEnabled: boolean
-  mirrored: boolean
-}
-
-type Value = MediaStream
-
-export type RoomParticipantSource = Source<Props, Value>
 
 export const RoomParticipant = {
   type: 'RoomParticipant',
   valueType: MediaStream,
   props: {
-    participantId: {},
-    type: {},
-    displayName: {},
+    id: {},
+    type: {}, // 'screen' | 'camera'
     videoEnabled: {},
     audioEnabled: {},
   },
-  init() {
-    let currentRoomParticipants = {} as {
-      [id: string]: RoomParticipantSource
-    }
-
-    const getRoomParticipant = (props: Props) => {
-      return currentRoomParticipants[props.participantId + '-' + props.type]
-    }
-
+  init({ addSource, removeSource, updateSource }) {
     CoreContext.on('RoomJoined', ({ room }) => {
-      currentRoomParticipants = {}
+      let listeners = {} as { [id: string]: Function }
+      let previousTracks = [] as SDK.Track[]
       let previousParticipants = [] as SDK.Participant[]
+      let participantStreams = {} as { [id: string]: MediaStream }
 
-      // TODO: Ideally this logic should be handled in "onChange"
       const updateParticipants = () => {
         // Update existing participants' tracks
         previousParticipants.forEach((x) => {
-          const participantSources = {
-            camera: currentRoomParticipants[x.id + '-camera'],
-            screen: currentRoomParticipants[x.id + '-screen'],
-          }
-          const streams = {
-            camera: participantSources.camera?.value,
-            screen: participantSources.screen?.value,
-          }
+          const srcObject = participantStreams[x.id]
+          const srcObjectScreenshare = participantStreams[x.id + '-screen']
 
           // Get one webcam track and one microphone track
           const webcamId = x.trackIds.find((x) => {
@@ -95,37 +67,74 @@ export const RoomParticipant = {
           const screenshareTrack = room.getTrack(screenshareId)
 
           // Replace the tracks on the existing MediaStream
-          updateMediaStreamTracks(streams.camera, {
+          updateMediaStreamTracks(srcObject, {
             video: webcamTrack?.mediaStreamTrack,
             audio: microphoneTrack?.mediaStreamTrack,
           })
-          updateMediaStreamTracks(streams.screen, {
+          updateMediaStreamTracks(srcObjectScreenshare, {
             video: screenshareTrack?.mediaStreamTrack,
           })
 
-          // Update the existing sources based on the participant
-          participantSources.camera.props = {
-            ...participantSources.camera.props,
+          updateSource(x.id, {
             videoEnabled: Boolean(webcamTrack && !webcamTrack.isMuted),
             audioEnabled: Boolean(microphoneTrack && !microphoneTrack.isMuted),
             displayName: x.displayName,
-            mirrored: x.meta.isMirrored,
-          }
-          participantSources.screen.props = {
-            ...participantSources.screen.props,
+            mirrored: x?.meta?.isMirrored,
+          })
+          updateSource(x.id + '-screen', {
             videoEnabled: Boolean(
               screenshareTrack && !screenshareTrack.isMuted,
             ),
             displayName:
               x.meta.screenDisplayName || `${x.displayName}'s Screen`,
-          }
+          })
         })
       }
 
       // Listen for changes to available tracks
-      room.useTracks(() => {
+      room.useTracks((tracks) => {
+        // Get tracks not contained in previousTracks
+        const newTracks = tracks.filter(
+          (track) => !previousTracks.some((x) => x.id === track.id),
+        )
+        // Get previous tracks not contained in current tracks
+        const removedTracks = previousTracks.filter(
+          (track) => !tracks.some((x) => x.id === track.id),
+        )
+        previousTracks = tracks
+
         updateParticipants()
-        triggerUpdate()
+
+        newTracks.forEach((x) => {
+          const { mediaStreamTrack, id, participantId, type } = room.getTrack(
+            x.id,
+          )
+          const source = {
+            id,
+            isActive: true,
+            value: mediaStreamTrack,
+            props: {
+              trackId: id,
+              participantId,
+              isMuted: x.isMuted,
+              type,
+            },
+          } as Compositor.Source.NewSource
+
+          // Add each new track as a source
+          if (mediaStreamTrack) {
+            if (mediaStreamTrack.kind === 'video') {
+              addSource(source)
+            } else {
+              addSource(source)
+            }
+          }
+        })
+        // Dispose of the old tracks
+        removedTracks.forEach((x) => {
+          removeSource(x.id)
+          listeners[x.id]?.()
+        })
       })
 
       // Listen for changes to available participants
@@ -143,97 +152,46 @@ export const RoomParticipant = {
 
         newParticipants.forEach((x) => {
           const { id } = x
-          const streams = {
-            camera: new MediaStream([]),
-            screen: new MediaStream([]),
-          }
+          const srcObject = new MediaStream([])
+          const screenSrcObject = new MediaStream([])
+          participantStreams[id] = srcObject
+          participantStreams[id + '-screen'] = screenSrcObject
 
-          currentRoomParticipants[id + '-camera'] = {
-            id: id + '-camera',
-            value: streams.camera,
+          addSource({
+            id,
+            isActive: true,
+            value: srcObject,
             props: {
-              participantId: id,
+              id,
               type: 'camera',
+              displayName: x.displayName || x.id,
               audioEnabled: false,
               videoEnabled: false,
-              mirrored: Boolean(x.meta.isMirrored),
+              mirrored: x?.meta?.isMirrored,
             },
-          }
-          currentRoomParticipants[id + '-screen'] = {
+          })
+          addSource({
             id: id + '-screen',
-            value: streams.screen,
+            isActive: true,
+            value: screenSrcObject,
             props: {
-              participantId: id,
+              id,
               type: 'screen',
+              displayName: x.displayName || x.id,
               audioEnabled: false,
               videoEnabled: false,
-              mirrored: false,
             },
-          }
+          })
         })
 
         updateParticipants()
 
         // Dispose of the old participants
         removedParticipants.forEach((x) => {
-          delete currentRoomParticipants[x + '-camera']
-          delete currentRoomParticipants[x + '-screen']
+          removeSource(x.id)
+          listeners[x.id]?.()
         })
-
-        triggerUpdate()
       })
     })
-
-    let cid = 1
-    type SourcesCallback = (sources: RoomParticipantSource[]) => void
-    const triggerUpdate = () => {
-      Object.values(listeners).forEach((x) =>
-        x(Object.values(currentRoomParticipants)),
-      )
-    }
-    const listeners = {} as {
-      [id: string]: SourcesCallback
-    }
-    const subscribeToSources = (cb: SourcesCallback) => {
-      const id = cid++
-      listeners[id] = cb
-
-      return () => {
-        delete listeners[id]
-      }
-    }
-
-    return {
-      load(nodeSources) {
-        subscribeToSources((roomParticipants) => {
-          nodeSources.reset(
-            RoomParticipant.type,
-            roomParticipants.map((x) => ({
-              id: x.id,
-              props: x.props,
-            })),
-          )
-        })
-      },
-      getValue(props) {
-        const value = getRoomParticipant(props)?.value
-        return {
-          value,
-          isActive: true,
-        }
-      },
-      onChange(_, props) {
-        // Note: We should probably manage the value update logic in here,
-        //  but currently we don't need to do anything since that value is
-        //  calculated at a global level.
-        const value = getRoomParticipant(props)?.value
-        return {
-          value,
-          isActive: true,
-        }
-      },
-    }
   },
-} as SourceDeclaration<Props, Value>
-
-export const Declaration = [RoomParticipant]
+} as SourceDeclaration

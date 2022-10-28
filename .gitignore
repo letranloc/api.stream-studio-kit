@@ -12,7 +12,6 @@ types
 dist-ssr
 db
 log.txt
-*.TODO
 *.local
 docs/
 .npmrc

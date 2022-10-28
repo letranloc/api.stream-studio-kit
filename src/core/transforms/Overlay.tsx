@@ -98,5 +98,3 @@ export const Overlay = {
     }
   },
 } as Compositor.Transform.TransformDeclaration
-
-export const Declaration = Overlay

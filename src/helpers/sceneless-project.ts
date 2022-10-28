@@ -2,13 +2,7 @@
  * Copyright (c) Infiniscene, Inc. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
-import { LogoProps } from '../core/sources/Logo'
-import { Background, BackgroundProps } from '../core/sources/Background'
-import { Overlay, OverlayProps } from '../core/sources/Overlays'
-import { getElementAttributes } from './../logic'
 /**
- * @deprecated Use component ScenelessProject instead (Command.createProject({ type: 'ScenelessProject' }))
- *
  * Create and manage a project with a {@link ScenelessProject.Commands simple and opinionated interface}.
  *
  * A ScenelessProject is designed to fulfill all of the requirements of
@@ -43,9 +37,9 @@ import { getElementAttributes } from './../logic'
  *
  * @module ScenelessProject
  */
-import { LogoProps } from '../core/sources/Logo'
-import { Background, BackgroundProps } from '../core/sources/Background'
-import { Overlay, OverlayProps } from '../core/sources/Overlays'
+import { LogoProps } from './../core/sources/Logo'
+import { Background, BackgroundProps } from './../core/sources/Background'
+import { Overlay, OverlayProps } from './../core/sources/Overlays'
 import { CoreContext } from '../core/context'
 import { getProject, getProjectRoom } from '../core/data'
 import { SDK, Compositor } from '../core/namespaces'
@@ -512,18 +506,6 @@ export const commands = (_project: ScenelessProject) => {
   let bannerContainer = foreground?.children?.find(
     (x) => x.props.id === 'fg-banners',
   )
-
-  const ensureSources = async () => {
-    const rootProps = root.props || {}
-    if (!root.props.sources) {
-      root.props.sources = {}
-    }
-    if (!root.props.sources.Banner) {
-      // TODO: Actual banners
-      root.props.sources.Banner = []
-    }
-    // TODO: Remaining sources
-  }
 
   const ensureForegroundContainers = async () => {
     const ensureBannerContainer = async () => {
@@ -1782,7 +1764,7 @@ export const commands = (_project: ScenelessProject) => {
 
         const { sourceProps } = node.props
         return cb({
-          participantId: sourceProps.participantId,
+          participantId: sourceProps.id,
           type: sourceProps.type,
         })
       }
@@ -1804,7 +1786,7 @@ export const commands = (_project: ScenelessProject) => {
       const { isMuted = false, isHidden = false, volume = 1 } = props
       const existing = content.children.find(
         (x) =>
-          x.props.sourceProps?.participantId === participantId &&
+          x.props.sourceProps?.id === participantId &&
           x.props.sourceProps?.type === type,
       )
       if (existing) return
@@ -1828,7 +1810,7 @@ export const commands = (_project: ScenelessProject) => {
           sourceType: 'RoomParticipant',
           sourceProps: {
             type,
-            participantId,
+            id: participantId,
           },
           volume,
           isMuted,
@@ -1850,7 +1832,7 @@ export const commands = (_project: ScenelessProject) => {
       content.children
         .filter(
           (x) =>
-            x.props.sourceProps?.participantId === participantId &&
+            x.props.sourceProps?.id === participantId &&
             x.props.sourceProps?.type === type &&
             x.props.sourceType === 'RoomParticipant',
         )
@@ -1863,14 +1845,10 @@ export const commands = (_project: ScenelessProject) => {
     removeParticipantScreenshare(participantId: string) {
       return commands.removeParticipant(participantId, 'screen')
     },
-    getParticipantNode(
-      participantId: string,
-      type: ParticipantType = 'camera',
-    ) {
+    getParticipantNode(id: string, type: ParticipantType = 'camera') {
       return content.children.find(
         (x) =>
-          x.props.sourceProps?.participantId === participantId &&
-          x.props.sourceProps?.type === type,
+          x.props.sourceProps?.id === id && x.props.sourceProps?.type === type,
       )
     },
     getParticipantState(
@@ -1960,7 +1938,7 @@ export const commands = (_project: ScenelessProject) => {
 
           // Get the participant associated with the node
           const nodeParticipant = room.getParticipant(
-            node.props.sourceProps?.participantId,
+            node.props.sourceProps?.id,
           )
           // If the participant is not in the room, remove the node
           if (!nodeParticipant) return true
@@ -2016,7 +1994,6 @@ export const commands = (_project: ScenelessProject) => {
   }
   const ensureValid = async () => {
     await ensureForegroundContainers()
-    await ensureSources()
     beforeInit(commands)
   }
 
@@ -2054,9 +2031,7 @@ export const create = async (
   size?: { x: number; y: number },
 ) => {
   return CoreContext.Command.createProject({
-    settings: {
-      props: settings,
-    },
+    settings,
     props,
     size,
   }) as Promise<ScenelessProject>
@@ -2089,21 +2064,26 @@ export const createCompositor = async (
   settings: ScenelessSettings,
 ) => {
   const { backgroundImage, layout, layoutProps = {} } = settings
-  const project = await CoreContext.compositor.loadProject(layoutId)
 
   // TODO: Batch insert
-  await project.insertRoot({
-    name: 'Root',
-    type: 'sceneless-project',
-    sourceType: 'Element',
-    layout: 'Layered',
-    size,
-    isRoot: true,
-    tagName: 'div',
-    fields: {
-      style: { background: 'black' },
+  const project = await CoreContext.compositor.createProject(
+    {
+      props: {
+        name: 'Root',
+        type: 'sceneless-project',
+        sourceType: 'Element',
+        layout: 'Layered',
+        size,
+        isRoot: true,
+        tagName: 'div',
+        version: 'beta',
+        fields: {
+          style: { background: 'black' },
+        },
+      },
     },
-  })
+    layoutId,
+  )
   const root = project.getRoot()
 
   // Create the base nodes for sceneless workflow

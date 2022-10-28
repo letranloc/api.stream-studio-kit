@@ -41,5 +41,3 @@ export const Element = {
     }
   },
 } as Compositor.Transform.TransformDeclaration
-
-export const Declaration = Element

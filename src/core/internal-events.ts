@@ -5,16 +5,15 @@
 import {
   getBaseUser,
   getProject,
-  getProjectSize,
   hydrateProject,
+  layoutToProject,
   toBaseDestination,
   toBaseProject,
 } from './data'
 import { InternalEventMap, subscribeInternal, trigger } from './events'
 import { SDK } from './namespaces'
 import { CoreContext, log } from './context'
-import { Overlay } from './sources'
-import { hasPermission, Permission } from '../helpers/permission'
+import { OverlaySource } from './sources'
 
 const { state } = CoreContext
 
@@ -61,7 +60,10 @@ subscribeInternal(async (event, payload) => {
     }
     case 'ProjectAdded': {
       const project = payload as InternalEventMap['ProjectAdded']
-      const internalProject = await hydrateProject(project, SDK.Role.ROLE_HOST)
+      const internalProject = await hydrateProject(
+        project,
+        'ROLE_HOST' as SDK.Role,
+      )
       const baseProject = toBaseProject(internalProject)
 
       // Update internal state
@@ -97,16 +99,7 @@ subscribeInternal(async (event, payload) => {
       const newLayoutId = project.metadata?.layoutId
       if (newLayoutId !== internalProject.layoutApi.layoutId) {
         internalProject.layoutApi.layoutId = project.metadata?.layoutId
-        internalProject.compositor = await CoreContext.compositor.loadProject(
-          newLayoutId,
-          {
-            size: getProjectSize(project),
-            canEdit: hasPermission(
-              SDK.Role.ROLE_HOST,
-              Permission.UpdateProject,
-            ),
-          },
-        )
+        internalProject.compositor = await layoutToProject(newLayoutId)
       }
       internalProject.videoApi.project = project
       internalProject.props = project.metadata?.props ?? {}
@@ -276,7 +269,7 @@ subscribeInternal(async (event, payload) => {
         const internalProject = getProject(projectId)
         if (!internalProject) return
         let source = internalProject.props.overlays.find(
-          (x: Overlay.OverlaySource) => x.id === sourceId,
+          (x: OverlaySource) => x.id === sourceId,
         )
         if (source) {
           source = {
@@ -291,7 +284,7 @@ subscribeInternal(async (event, payload) => {
           }
 
           const overlayIndex = internalProject.props.overlays.findIndex(
-            (x: Overlay.OverlaySource) => x.id === sourceId,
+            (x: OverlaySource) => x.id === sourceId,
           )
 
           if (overlayIndex > -1) {

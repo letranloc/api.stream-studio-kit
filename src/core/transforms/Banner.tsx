@@ -137,5 +137,3 @@ export const Banner = {
     }
   },
 } as Compositor.Transform.TransformDeclaration
-
-export const Declaration = Banner

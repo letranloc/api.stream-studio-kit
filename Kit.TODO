@@ -1,0 +1,343 @@
+Planning:
+  - Ensure all existing methods remain usable for Maestro
+    > i.e. Make sure nothing will break for Maestro
+    > Transforms like Image and Video might need to be backwards compatible: either change the name of their new forms or make them compatible inside sceneless-project
+  - Remove Node commands and 'NodeChanged', etc. events from CoreContext
+    > These will be managed wholly by the compositor
+  - Check NPS triggering too much
+  - Broadcast start
+
+Backward Compatibility:
+
+  - Create a MultiScene component as PoC
+      children: { scenes: [
+        {type: 'ScenelessProject', componentProps: {}, componentChildren: [] },
+        {type: 'ScenelessProject', componentProps: {}, componentChildren: [] },
+      ],
+      create () { 
+        const children = [createComponent('ScenelessProject', {}, [])]
+        return { 
+          children,
+          activeSceneId: children[0].id
+        } 
+      }
+      commands: {
+        addScene(type, props) { createComponent(type, props, []) }
+        removeScene()
+        setActiveScene()
+      }
+      render ({children}) {
+        return renderNode({
+          layout: 'Grid',
+          layoutProps: { cover: true }
+        }, children.scenes
+            .filter(x => x.id === props.activeSceneId)
+            // .map(x => renderComponent(x)
+        )
+      }
+      - When updating a child node, the compositor must recognize if the node is virtual and instead update the node in the component.children
+        > The parent node will have to persist to the database when its children change
+        > Maybe renderVirtualTree() can keep an index of which virtual children map to which parent, and call update() until it gets to a non-virtual
+        > UPDATE: !The change of props in update() should be done after a lookup of nodeIndex[id], because a vritual node could be rendered with a spread operator, detaching it from the parent.
+          > Ergo, the children should be indexed as soon as they are added to node.componentChildren (not at render time)
+    - Add helpers {createComponent(type, props, children), createNode(type, props)}
+      - Directly exported by compositor (not instance)
+      - createComponent() calls Component.create() and assigns a generateId()
+    - Add helpers {renderNode(props, children), renderElement(fields)}
+      - Only passed into render() from Component
+      - Assigns an id of node.id + generateId()
+      > Pass into Component.render()
+      > renderElement() is just a helper that renders a node as an HTML element with fields (e.g. style, className)
+    - Does getNodeComponent() work for sub-components?
+      > I really should figure out a clean way to query down the tree
+      > Maybe it's just a single recursive method that returns a wrappedComponent, with children: wrappedComponent[]. This is probably the only thing needed to render the whole project!
+        - The wrap() should include base-level commands suck as {setOpacity(), setSize(), setLayout(), etc.} that apply to all nodes
+          > This will be a good place to add some type safety
+    - Experiment with scene switch transitions
+    - Explore storing broadcast state on compositor? Or listening to broadcast events?
+
+      Notes: 
+        - Sources will have to go to the node used to create the component. Maybe they already are?
+  
+  - Wire up remaining sceneless-project methods
+    - All methods updated to use proper images/videos/banner sources
+    - Pass styles in based on props (no CSS)
+    - Update demo project to read from project sources
+      > NOTE: Images and Videos can hold metadata to determine whether to show them for overlays/logos/etc. selection
+  - Update sceneless-project to use new sources
+    - Finish "ensureSources"
+    - Remove unused sources like Overlay and Logo
+  - Update existing sources to use load() interface
+    > Test that sceneless-project still works
+    > Shelf changes, create project, then unshelf and reload
+  - Wire up double click/showcase
+  - Change renderContainer in example to use project.scene.render()
+  - Determine whether we should use queries/commands
+    > Remove queries if not needed
+    > Pass {query} into render() (not execute)
+  - Add debug logs
+    > Pass logger into compositor (and source/transform/components manager)
+  - Test ALL functionality 1:1
+  - Address all TODOs
+    > Or create ticket
+    
+    Testing:
+      - Set up a migration for a component (ScenelessProject) and make sure it handles it correctly
+      - Switch back and forth between {useComponents}=true/false
+      - Should be able to load multiple projects at the same time
+
+  Nice to have:
+
+    - Improve drag+drop
+      - Allow dragging between parents
+      - Set node._virtual during render if virtual
+        - Root of component should always have the ID of the actual node
+      - Determine what is draggable
+        > If there are no render methods specified, the node is not draggable.
+        > Unless the node's parent is not virtual
+      - Determine what can be dropped (and upon what?)
+        > e.g. (Own parent === yes, validate(node) === yes)
+      > Consider that it should specify editor name "drag n drop"
+    - TEST: Return Component inside component
+      - Need to create() the component on the fly in render if it is not indexed already
+    - Add ability for temporary/local sources
+      > Stuff like images or chat or even WebRTC that exist only locally and are not propagated to other connections
+      > Explore the idea of using Source.value only for such sources
+    - Add ability for single sources?
+      > A single source (e.g. background) where we only update its image/text
+    - Rename compositor Project to Scene
+    - Rename transform to element
+      - Change node {...props} to {elementProps: props}
+    - Fix context.execute type checking
+    - Clean up dbAdapter:
+      - Move {handleInsert, handleUpdate, handleChange} to dbAdapter
+      - Move swap(), move(), reorder() to dbAdapter and call batch() from there
+
+  Final (Later):
+
+    - Update existing sources to use the new Source interface
+      > Or just comment them out for now to test Image
+    - Create the v1 migration
+      - Add a recreate() method
+      > If a project does not have a `version` field, we'll forego use of `vers`
+      > This will create a new project altogether
+    - Add images/videos to project from Studio2
+      - Do it on project create, but also once for each project if its sources are empty
+      - Use these to display the list of available media in the UI
+      > We'll need to include metadata so we know which image/video to show in each list
+    - Reconcile version mismatch between host and guest (See ticket)
+    - Improve performance:
+      - The render tree result should be cached until the props change
+      
+  Ideas:
+    
+    - It should be easier to access the ScenelessProject commands
+      > Think through some standardized way to query a node, starting with root
+      > compositor.root() -> Component   // e.g. ScenelessProject
+        > Every component has its own queries e.g. query
+    - Allow every node to be wrapped in the "ComponentInterface" where {commands, queries} are empty objects if there is no associated component.
+      > Then we update the getNode() to return this interface every time.
+      > We could expand on this to add {get(), find()} and other traversals to the component context so that one can easily navigate the tree
+    - When calling renderTree we should probably denote {virtual: true} on nodes that are part of a component
+    - Every component should have `useProp` (Is this actually helpful?)
+      > Compositor-level control
+
+
+
+----
+
+v2 Revamp:
+  - Think about: Event/command subsystem
+    > How this afects keyboard shortcuts/macros
+  - Move all WebRTC logic out of "core"
+    - Project should have no concept of "join room"
+    - Get rid of the webrtc helpers
+  - Move all API.stream-specific logic to folder adapters/
+    // This will help with rapid iteration (no need to auth with API.stream)
+    - API adapter (create project, update user, etc.)
+    - data.ts logic (e.g. toBaseProject)
+    - db-adapter (add/remove/update nodes)
+      > This is interesting since it needs to batch requests
+    - Create an adapter for localstorage (simple tree database)
+
+
+Stack rank:
+
+  Important immediately:
+    - Upgrade Livekit
+    - Start a beta branch studio-kit
+      > Est. 3 days
+      > Research required
+    - Introduce the concept of Components
+      > Est. 1 week
+      > This resolves all TypeError warnings that indicate the project
+      - Enable versioning
+      - Convert ScenelessProject to component
+        > Assume all projects without "version" to be v0
+        - Add initial migration case: "v0" -> "v1"
+      - Attempt to reconcile if a runtime error indicates an expected property or child is not available.
+        - If no reconciliation can be achieved, recreate the project while keeping the {props} intact
+      - Add type safety for project props and child props
+      - Ability to watch for changes between multiple connections
+        > e.g. If the background image changes, that is a child node, so we have to know which nodes to watch. One solution is a "useBackgroundImage" to live alongside the setBackgroundImage.
+        > What about stuff like available images? i.e. We can add an image as an available source, but there's no way to ensure that becomes available to other connections. It seems like they should be stored on the project (but what about more complex sources like webrtc/participants?)
+          > Maybe we should register everything as a source, and the source should include the actual information about how to render it?
+          This means all sources would be the same across all participants
+      > Unkowns:
+        - Can this be done on the server? (Perhaps as middleware?)
+    - Clean up webrtc/room logic
+      > Est. 3 days
+      - Consolidate room-context/simple-room
+      - Make sure event listeners that depend on livekitRoom are cleaned up when room is detached
+        >  Ideally simple-room "use" methods should re-listen once the room is available again
+      - Note: Lots of sentry errors are being thrown at time of page refresh because room.livekitRoom is no longer available
+
+  Sentry-specific:
+    - Clear sentry in onbeforeunload()
+      - Don't report errors that occur during page refresh
+  
+
+Studio Kit Architecture:
+
+  - Sources such as WebRTC should be registered and updated through the compositor interface.
+  - Compositor should have no idea of a "room" or any other non-compositor concepts
+    > Compositor should stand alone entirely
+  - The compositor should enable you to list sources, which would be enough to populate the greenroom or videos/images
+  - WebRTC sources should not be registered by Studio Kit
+    > Folks should be able to use any WebRTC solution, not necessarily ours
+    > In this sense, the WebRTC source logic currently included should be thought of as a built-in adapter and re-purposed as such.
+  - Components ("types") and versioning/migration scripts
+    > Change ScenelessProject to a Component
+    - Add types for SDK.Project as ScenelessProject (props)
+    { name, create, preFilter, postFilter, childType }
+    - create(props, children)
+      -> forEachDown type.create(childProps, children?)
+        > Think through this (need a "Create" method that kicks this all off)  
+      - Figure out how to create an entire tree of nodes by type:
+        - Automatically turn into a single batch call
+    - childType is validated on the value being sent _into_ preFilter.
+      > Invalid children are filtered out
+    - preFilter
+      (node: SceneNode) => SceneNode
+    - postFilter
+      (el: HTMLElement) => HTMLElement
+      > Can we use this to add banners/nameplates?
+      > Can we get the size of the element here? That would be sick
+        > Otherwise I'm not sure how we'll show the correct nameplate size
+    - Move renderTree to "types.ts"
+      - Adjust to work on types rather than transforms
+      - Only update when props (output of preFilter) have changed
+        > deepCompare
+    - Component should be able to declare layout or transform inline
+  - Change Transform nomenclature to Element
+  - Project in React context does not update based on events
+    > Should probably remove this altogether
+    > Manage project state ourselves?
+  - Remove React entirely
+    > Compositor
+    > Transforms (move to Studio with registerTransform())
+  - Move Studio2-specific concepts out of Transforms
+  - HTML-Layout logic needs to be revisited
+    - Simplify code
+    - Add documentation / diagrams
+    - Add regression tests
+    - Transition logic is not consistent
+      > ChildPosition vs LayoutChild.data (should be the same?)
+    - Sizing is inconsistent
+      > Do percentages work or must size be supplied as a number?
+  - Cloud renderer needs to be versioned
+  - WebRTC room logic is overly abstracted
+  - Shared state is unreliable
+    > Loading a project while changes are being made means the data will be corrupted
+  - Add sentry to cloud renderer
+  - Update Livekit to latest version
+    > Server and client in tandem?
+  - Ability to introspect Live/Layout/Event API requests
+    > Ability to query all requests made by studio kit?
+  - Ability for user to edit without pushing updates live
+    > This will be necessary to bring Studio1 functionality to Studio2
+    > (Consider that other collaborators might like to see these edits in real time, so it's not as simple as blocking requests to the server)
+  - Create project with batch insert of all layers
+    > Massive reduction of initial load time
+  
+  Open source:
+    - Major version bump
+    - Clean up documentation
+    - WebRTC should be moved to a separate package
+      > Or at least a self-contained folder
+  
+  Overview:
+    - Studio kit in its current state is not tenable
+    - Every new feature we add to studio-kit makes it more fragile, and the complexity of keeping it backwards compatible for Maestro and Eventcube is compounded.
+    - We should do a major version bump and clean everything up
+      - Keep this on a beta branch and let it evolve alongside studio
+      
+
+
+Retreat ideas:
+
+  The true power of Studio Kit:
+    - Add views to Studio to make it more apparent what's happening under the hood
+      - Tree view (all nodes w/ type)
+      > Create a separate entry point with customized views
+
+  Custom support tooling:
+    - How to customize the admin view
+
+  Stu ideas:
+    - What worked
+    - What didn't
+    - What could have gone better
+      - What sacrifices were made
+
+I was getting frustrated with trying to get permissions checks that could work reliably across browsers so I sunk my evening into it. It's still not perfect but after a lot of digging and screwing around I feel it's finally in a decent place.
+
+
+Complexities of backwards compatibility:
+  - What happens if two guests are on different versions of Studio Kit? 
+    e.g. The release goes out while a project is live, and then a guest joins.
+    > Perhaps only the host will trigger an update. If so, then how do guests reconcile?
+  - The initial instance of backwards compatibility requires explicit intent to upgrade (so we don't break Maestro functionality)
+    > How does the renderer discern whether or not to attempt an upgrade?
+  - Testing this is a very careful process. Ironically, implementing version functionality requires massive changes that would be much safer if we had version functionality.
+
+Benefits to this approach:
+  - Much faster load time
+  - Less circular code (easier to manage)
+  - Componentized/extensible. Easier to build upon.
+
+  - Putting sources on the project allows cohosts and other guests to access them. It also simplifies the view layer and synchronizes with the API data.
+
+
+Done:
+  
+- Should the root node store sources? 
+  // UPDATE: Every component should have Source support. The following changes are still relevant, except maybe the part about creating an absolute root node
+    > Whenever a node is added/loaded (indexed), call Source.init({Component}).
+    e.g. This would be the time to join the room for WebRTC and set up listeners.
+    Does this make sense for RMTP sources as well?
+  x Update Sources to be on components
+    x Update node.props.sources on source add/remove/update
+    x Update component interface to { execute, query, useSource(type) }
+      // To execute commands, query elements (or other commands), and receive updated sources
+    - Figure out how to fix the sceneless-project
+  x Set up a listener for 'NodeChanged' where nodeId=root.id
+    > The root node will automatically listen for changes to sources[type] and run a diff on its previous value. 
+    x Create loadSource() in source manager
+    - Create setSources(type)
+      - Run the standard diff for source[type] to determine added/removed/changed
+      - Call loadSource({ value: Source[type].getValue(props), props }) for each added source
+        > Update the source's {value, isActive} and trigger SourceChanged
+      - Call removeSource(id) for each removed source
+      - Call updateSource(id) for each changed source
+    - Call setSources(type, sources)
+    - Source init() should return an object with the following:
+      - getValue(props)
+      - load(component):
+          > Receives {setIsActive, addSource, removeSource, ...maybe others?}
+          > This will be used for things like WebRTC that need to handle direct updates to the sources. Other times, this will be handled by a component 
+        e.g. ScenelessProject.addImage()
+          > onLoad() will be called for each active node whose component uses it
+      - onChange(source): Used to update the source value. Return {isActive, value}
+      - unload(): Used to clear out any listeners. Called when node is removed.
+        - Make sure 

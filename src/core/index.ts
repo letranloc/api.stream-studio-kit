@@ -3,14 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
 import { CoreContext, setAppState, log } from './context'
-import { asArray, omit, toDataNode, toSceneTree } from '../logic'
+import { omit, toDataNode, toSceneTree } from '../logic'
 import { ApiStream, LiveApiModel, LayoutApiModel } from '@api.stream/sdk'
 import { compositorAdapter, latestUpdateVersion } from './compositor-adapter'
 import config from '../../config'
 import * as Transforms from './transforms/index'
 import * as Layouts from './layouts/index'
 import * as Sources from './sources/index'
-import * as Components from './components/index'
 import './internal-events'
 
 // Register default scene components
@@ -42,7 +41,6 @@ export type Settings = {
   env?: 'dev' | 'stage' | 'prod'
   logLevel?: LogLevel
   guestToken?: string
-  useComponents?: boolean
 }
 
 /**
@@ -57,7 +55,6 @@ export type AdvancedSettings = {
   sources?: Compositor.Source.SourceDeclaration[]
   layouts?: Compositor.Layout.LayoutDeclaration[]
   transforms?: Compositor.Transform.TransformDeclaration[]
-  components?: Compositor.Component.Component[]
   defaultTransforms?: Compositor.Transform.DefaultTransformMap
 }
 
@@ -84,10 +81,8 @@ export const init = async (
   const {
     layouts = [],
     transforms = [],
-    components = [],
     sources = [],
     defaultTransforms = {},
-    useComponents = false,
     guestToken,
   } = settings
   const client = new ApiStream({
@@ -97,16 +92,13 @@ export const init = async (
   })
 
   const conf = config(env)
-  const guestProject = await client.load(guestToken)
 
   const compositor = Compositor.start({
-    // Ensure components up to date unless joining a project as a guest
-    updateOutdatedComponents: !guestProject && useComponents,
     dbAdapter: compositorAdapter,
     transformSettings: {
       defaultTransforms: {
-        ...conf.defaults.transforms,
         ...defaultTransforms,
+        ...conf.defaults.transforms,
       },
     },
   })
@@ -123,14 +115,11 @@ export const init = async (
     ...CoreContext,
   }
 
-  const getDeclarations = (modules: object) =>
-    Object.values(modules).flatMap((x) => asArray(x.Declaration)) as any[]
+  compositor.registerSource([...Object.values(Sources), ...sources])
+  compositor.registerTransform([...Object.values(Transforms), ...transforms])
+  compositor.registerLayout([...Object.values(Layouts), ...layouts])
 
-  compositor.registerSource([...getDeclarations(Sources), ...sources])
-  compositor.registerTransform([...getDeclarations(Transforms), ...transforms])
-  compositor.registerLayout([...getDeclarations(Layouts), ...layouts])
-  compositor.registerComponent([...getDeclarations(Components), ...components])
-
+  const guestProject = await client.load(guestToken)
   let initialProject: SDK.Project
   if (guestProject) {
     await client
@@ -462,7 +451,7 @@ export const init = async (
     })
   }
 
-  const studio = {
+  return {
     ...omit(CoreContext, [
       'clients',
       'config',
@@ -507,13 +496,8 @@ export const init = async (
     },
     initialProject,
     load,
-  } as Partial<SDK.Studio>
-
-  if (!useComponents) {
-    studio.render = render
+    render,
   }
-
-  return studio as SDK.Studio
 }
 
 /**

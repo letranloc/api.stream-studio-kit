@@ -5,7 +5,7 @@
 import ReactDOM from 'react-dom'
 import React from 'react'
 import { CoreContext } from '../context'
-import { getProject } from '../data'
+import { getProject, getProjectRoom } from '../data'
 import { Compositor } from '../namespaces'
 import { InternalEventMap, trigger, triggerInternal } from '../events'
 import APIKitAnimation from '../../compositor/html/html-animation'
@@ -215,5 +215,3 @@ export const Video2 = {
     }
   },
 } as Compositor.Transform.TransformDeclaration
-
-export const Declaration = Video2

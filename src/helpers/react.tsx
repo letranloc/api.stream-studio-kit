@@ -13,8 +13,14 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react'
 import { on } from '../core/events'
 import { SDK } from '../core/namespaces'
-import { ScenelessProject } from './index'
+import { Callback, ScenelessProject } from './index'
 import { watchDevices } from './webrtc'
+
+export const useActiveProjectRoom = (): SDK.Room => {
+  const [room, setRoom] = useState<SDK.Room>(null)
+  useEffect(() => Callback.useActiveProjectRoom(setRoom), [])
+  return room
+}
 
 /**
  * React hook which implements {@link Room.watchDevices} and returns
@@ -127,23 +133,19 @@ try {
  * ```
  */
 export const StudioProvider = ({
-  useCommands = true,
   children,
 }: {
   children: React.ReactChild
-  useCommands?: boolean
 }) => {
   const [room, setRoom] = useState<SDK.Room>()
   const [project, setProject] = useState<SDK.Project>()
   const [studio, setStudio] = useState<SDK.Studio>()
   const [webcamId, setWebcamId] = useState<string>(stored.webcamId)
   const [microphoneId, setMicrophoneId] = useState<string>(stored.microphoneId)
-  const projectCommands = useCommands
-    ? useMemo(
-        () => (project ? ScenelessProject.commands(project) : null),
-        [project],
-      )
-    : null
+  const projectCommands = useMemo(
+    () => (project ? ScenelessProject.commands(project) : null),
+    [project],
+  )
 
   // Listen for project changes
   useEffect(() => {
@@ -196,7 +198,7 @@ export const StudioProvider = ({
           } catch (e) {}
           setMicrophoneId(id)
         },
-        ...(useCommands && { projectCommands }),
+        projectCommands,
       }}
     >
       {children}

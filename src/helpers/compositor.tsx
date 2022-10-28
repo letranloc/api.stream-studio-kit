@@ -109,7 +109,7 @@ const onDrop = async (
 }
 
 let foundDropTarget = false
-const ElementTree = (props: { node: SceneNode }) => {
+const ElementTree = (props: { nodeId: string }) => {
   const isDragging = useRef(false)
   const interactiveRef = useRef<HTMLDivElement>()
   const transformRef = useRef<HTMLDivElement>()
@@ -121,7 +121,9 @@ const ElementTree = (props: { node: SceneNode }) => {
     checkIsDragTarget,
     checkIsDropTarget,
   } = useContext(CompositorContext)
-  const { node } = props
+  const { nodeId } = props
+  const node = project.compositor.get(nodeId)
+  if (!node) return null
 
   const element = CoreContext.compositor.getElement(node)
   const layout = node.props.layout || 'Row'
@@ -321,7 +323,7 @@ const ElementTree = (props: { node: SceneNode }) => {
             layout={layout}
           >
             {node.children.map((x) => (
-              <ElementTree key={x.id} node={x} />
+              <ElementTree key={x.id} nodeId={x.id} />
             ))}
           </ls-layout>
         </ErrorBoundary>
@@ -341,16 +343,17 @@ const Root = (props: { setStyle: (CSS: string) => void }) => {
 
   useEffect(() => {
     // Build the entire tree
-    setTree(project.compositor.renderVirtualTree())
+    setTree(project.compositor.renderTree())
 
     return CoreContext.onInternal('NodeChanged', () => {
       // Traverse and update the tree
-      setTree(project.compositor.renderVirtualTree())
+      setTree(project.compositor.renderTree())
     })
   }, [])
 
   useEffect(() => {
-    const { x: rootWidth } = project.compositor.settings.size
+    const root = project.compositor.getRoot()
+    const { x: rootWidth } = root.props.size
 
     const updateCSS = () => {
       const {
@@ -397,8 +400,8 @@ const Root = (props: { setStyle: (CSS: string) => void }) => {
       }}
       style={{
         userSelect: 'none',
-        width: `${project.compositor.settings.size.x + PADDING * 2}px`,
-        height: `${project.compositor.settings.size.y + PADDING * 2}px`,
+        width: `${tree.props.size.x + PADDING * 2}px`,
+        height: `${tree.props.size.y + PADDING * 2}px`,
         margin: PADDING + 'px',
       }}
     >
@@ -409,7 +412,7 @@ const Root = (props: { setStyle: (CSS: string) => void }) => {
           overflow: 'hidden',
         }}
       >
-        <ElementTree node={tree} />
+        <ElementTree nodeId={tree.id} />
       </div>
     </div>
   )

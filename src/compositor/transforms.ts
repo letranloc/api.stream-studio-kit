@@ -9,15 +9,15 @@ import type { Source } from './sources'
 
 // TODO: Make this generic to HTML/Canvas when canvas compositing is supported
 
-export type TransformDeclaration<S extends Source = Source, Props = {}> = {
+export type TransformDeclaration = {
   name: string
   sourceType?: string // TODO: keyof SourceType
-  useSource?: (sources: S[], nodeProps: Props & SceneNode['props']) => S
+  useSource?: (sources: Source[], nodeProps: any) => Source
   tagName?: string
   props?: PropsDefinition
   create?: (
-    context: TransformContext<S, Props>,
-    initialProps: Props,
+    context: TransformContext,
+    initialProps: any,
   ) => TransformElementBase
 }
 
@@ -42,10 +42,10 @@ export type TransformElement = TransformElementBase & {
 }
 
 export type TransformMap = {
-  [name: string]: TransformDeclaration<Source>
+  [name: string]: TransformDeclaration
 }
 export type DefaultTransformMap = {
-  [sourceType: string]: TransformDeclaration<Source>['name']
+  [sourceType: string]: TransformDeclaration['name']
 }
 
 export type TransformSettings = {
@@ -53,12 +53,12 @@ export type TransformSettings = {
 }
 
 export type TransformRegister = (
-  declaration: TransformDeclaration<Source> | TransformDeclaration<Source>[],
+  declaration: TransformDeclaration | TransformDeclaration[],
 ) => void
 
 export type TransformElementGetter = (node: SceneNode) => TransformElement
 
-export type TransformContext<S extends Source, Props = {}> = {
+export type TransformContext = {
   /** Listens for all events emitted by the compositor */
   onEvent?: (
     event: string,
@@ -66,11 +66,18 @@ export type TransformContext<S extends Source, Props = {}> = {
     nodeId?: string,
   ) => Disposable
   /** Called anytime the Source value returned by useSource is different */
-  onNewSource?: (cb: (source: S) => void) => void
+  onNewSource?: (cb: (source: Source) => void) => void
   /** Called anytime the Source value itself has been modified */
-  // onSourceModified?: (cb: (source: S) => void) => void
+  onSourceModified?: (cb: (source: Source) => void) => void
   /** Called anytime the Node associated with the element has been updated */
-  onUpdate?: (cb: (nodeProps: Props) => void) => void
+  onUpdate?: (cb: (nodeProps: any) => void) => void
   /** Called when the Node associated with the element has been removed */
-  onRemove?: (cb: (nodeProps: Props) => void) => void
+  onRemove?: (cb: (nodeProps: any) => void) => void
+}
+
+export type Filter = (node: SceneNode) => SceneNode
+
+// Run the pipeline of filters in order
+export const runFilters = (node: SceneNode, filters: Filter[] = []) => {
+  return filters.reduce((node, filter) => filter(node), node)
 }

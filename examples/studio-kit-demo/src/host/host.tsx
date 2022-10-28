@@ -3,24 +3,20 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
 import React, { useEffect, useRef, useState } from 'react'
-// TODO: Change import to @api.stream/studio-kit
-import { init, Helpers, Component, Source, SDK } from '../../../../'
+import { init, Helpers  } from '../../../../'
 import { Participants } from '../shared/participant'
 import { ControlPanel, DeviceSelection } from '../shared/control-panel'
-import { DEFAULT_LAYOUT, getLayout, layouts } from '../layout-examples'
+import { DEFAULT_LAYOUT, getLayout, layouts } from './layout-examples'
 import { Chat } from '../shared/chat'
 import Style from '../shared/shared.module.css'
 import config from '../../config'
 
-import { ScenelessProject } from '../projects/Sceneless'
-import { MultiSceneProject } from '../projects/MultiScene'
-
 import ReCAPTCHA from 'react-google-recaptcha'
 import axios from 'axios'
 import { nanoid } from 'nanoid'
-import { StringNullableChain } from 'lodash'
-import { Column } from '../ui/layout/Box'
+import { Banner } from '../../../../types/src/helpers/sceneless-project'
 
+const { ScenelessProject } = Helpers
 const { useStudio } = Helpers.React
 
 const getUrl = () =>
@@ -40,60 +36,13 @@ const storage = {
   userName: localStorage.getItem('userName') || '',
 }
 
-const sources = {
-  Image: [
-    {
-      src: getUrl() + 'bg.png',
-    },
-  ],
-  Video: [
-    {
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-stars-in-space-1610-large.mp4',
-    },
-    {
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-curvy-road-on-a-tree-covered-hill-41537-large.mp4',
-    },
-    {
-      src: 'https://assets.mixkit.co/videos/preview/mixkit-curvy-road-on-a-tree-covered-hill-41537-large.mp4',
-    },
-  ],
-}
-
-const projects = {
-  ScenelessProject: {
-    settings: {
-      type: 'ScenelessProject',
-      props: {
-        layout: getLayout(DEFAULT_LAYOUT).layout,
-        layoutProps: getLayout(DEFAULT_LAYOUT).props,
-      },
-      sources,
-    },
-    Component: ScenelessProject,
-  },
-  MultiSceneProject: {
-    settings: {
-      type: 'MultiSceneProject',
-      props: {},
-      sources,
-    },
-    Component: MultiSceneProject,
-  },
-}
-
 export const generateId = () => (Math.random() * 1e20).toString(36)
 
 const Login = (props: {
-  onLogin: (result: {
-    token: string
-    userName: string
-    projectType: keyof typeof projects
-  }) => void
+  onLogin: ({ token, userName }: { token: string; userName: string }) => void
 }) => {
   const { onLogin } = props
   const [userName, setUserName] = useState(storage.userName)
-  const [projectType, setProjectType] =
-    useState<keyof typeof projects>('ScenelessProject')
   const [recaptchaToken, setRecaptchaToken] = useState<string>()
 
   const login = async (e: any) => {
@@ -140,7 +89,7 @@ const Login = (props: {
       token = res.data.accessToken as string
     }
 
-    onLogin({ token, userName, projectType })
+    onLogin({ token, userName })
   }
 
   return (
@@ -160,18 +109,6 @@ const Login = (props: {
             setUserName(e.target.value)
           }}
         />
-        <label>Project type</label>
-        <select
-          defaultValue={projectType}
-          style={{ width: 302 }}
-          onChange={(e) =>
-            setProjectType(e.target.value as keyof typeof projects)
-          }
-        >
-          {Object.keys(projects).map((x) => (
-            <option value={x}>{x}</option>
-          ))}
-        </select>
         <div style={{ marginTop: 10, height: 78 }}>
           <ReCAPTCHA
             theme="dark"
@@ -193,26 +130,66 @@ const Login = (props: {
   )
 }
 
-const Top = ({
-  studio,
-  project,
-}: {
-  studio: SDK.Studio
-  project: SDK.Project
-}) => {
+const Project = () => {
+  const { studio, project, room, projectCommands } = useStudio()
+  const renderContainer = useRef()
   const destination = project.destinations[0]
   const destinationAddress = destination?.address.rtmpPush
+  const { Command } = studio
+
   const [rtmpUrl, setRtmpUrl] = useState(destinationAddress?.url)
   const [streamKey, setStreamKey] = useState(destinationAddress?.key)
-  const [isLive, setIsLive] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
   const [guestUrl, setGuestUrl] = useState('')
+  const [isLive, setIsLive] = useState(false)
+  const [selectedVideo, setSelectedVideo] = useState(null)
+  const [selectedImage, setSelectedImage] = useState(null)
+  const [banners, setBanners] = React.useState<Banner[]>(
+    studio.compositor.getSources('Banner'),
+  )
 
-  // Generate project links
-  useEffect(() => {
-    studio.createPreviewLink().then(setPreviewUrl)
-    studio.createGuestLink(getUrl() + 'guest/').then(setGuestUrl)
-  }, [])
+  const [projectedLoaded, setProjectedLoaded] = useState(false)
+  // Get custom layout name from metadata we store
+  const layout = project.props.layout
+  const background = projectCommands.getBackgroundMedia()
+  const overlay = projectCommands.getImageOverlay()
+
+  const overlays = [
+    {
+      id: '123',
+      url: 'https://www.pngmart.com/files/12/Twitch-Stream-Overlay-PNG-Transparent-Picture.png',
+    },
+    {
+      id: '124',
+      url: 'https://www.pngmart.com/files/12/Stream-Overlay-Transparent-PNG.png',
+    },
+  ]
+
+  const logos = [
+    {
+      id: '128',
+      url: 'https://www.pngmart.com/files/12/Twitch-Stream-Overlay-PNG-Transparent-Picture.png',
+    },
+    {
+      id: '129',
+      url: 'https://www.pngmart.com/files/12/Stream-Overlay-Transparent-PNG.png',
+    },
+  ]
+
+  const videooverlays = [
+    {
+      id: '125',
+      url: 'https://assets.mixkit.co/videos/preview/mixkit-stars-in-space-1610-large.mp4',
+    },
+    {
+      id: '126',
+      url: 'https://assets.mixkit.co/videos/preview/mixkit-curvy-road-on-a-tree-covered-hill-41537-large.mp4',
+    },
+    {
+      id: '127',
+      url: 'https://assets.mixkit.co/videos/preview/mixkit-curvy-road-on-a-tree-covered-hill-41537-large.mp4',
+    },
+  ]
 
   // Listen for project events
   useEffect(() => {
@@ -225,8 +202,38 @@ const Top = ({
     })
   }, [])
 
+  useEffect(() => {
+    studio.compositor.subscribe((event, payload) => {
+      if (event === 'VideoTimeUpdate') {
+        console.log(payload)
+      }
+    })
+  }, [])
+
+  React.useEffect(() => studio.compositor.useSources('Banner', setBanners), [])
+  // Generate project links
+  useEffect(() => {
+    studio.createPreviewLink().then(setPreviewUrl)
+    studio.createGuestLink(getUrl() + 'guest/').then(setGuestUrl)
+  }, [])
+
+  useEffect(() => {
+    studio.render({
+      containerEl: renderContainer.current,
+      projectId: project.id,
+      dragAndDrop: true,
+    })
+  }, [renderContainer.current])
+
+  function randomIntFromInterval(min: number, max: number) {
+    // min and max included
+    return Math.floor(Math.random() * (max - min + 1) + min)
+  }
+
+  if (!room) return null
+
   return (
-    <Column>
+    <div className={Style.column}>
       <div style={{ fontSize: 11, marginBottom: 14 }}>
         Logged in as {localStorage.userName}
         <div>
@@ -241,52 +248,267 @@ const Top = ({
           </a>
         </div>
       </div>
-      <label>RTMP Url</label>
-      <input
-        type="text"
-        defaultValue={rtmpUrl}
-        onChange={(e) => {
-          setRtmpUrl(e.target.value)
-        }}
-      />
-      <label>Stream Key</label>
-      <input
-        type="text"
-        defaultValue={streamKey}
-        onChange={(e) => {
-          setStreamKey(e.target.value)
-        }}
-      />
+      <div className={Style.column} style={{ width: 316, display: 'flex' }}>
+        <label>RTMP Url</label>
+        <input
+          type="text"
+          defaultValue={rtmpUrl}
+          onChange={(e) => {
+            setRtmpUrl(e.target.value)
+          }}
+        />
+        <label>Stream Key</label>
+        <input
+          type="text"
+          defaultValue={streamKey}
+          onChange={(e) => {
+            setStreamKey(e.target.value)
+          }}
+        />
+        <div
+          className={Style.row}
+          style={{ width: '100%', justifyContent: 'flex-end', marginTop: 5 }}
+        >
+          {!isLive ? (
+            <button
+              onClick={async () => {
+                await Command.setDestination({
+                  projectId: project.id,
+                  rtmpKey: streamKey,
+                  rtmpUrl,
+                })
+                Command.startBroadcast({
+                  projectId: project.id,
+                })
+              }}
+            >
+              Go Live
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                Command.stopBroadcast({
+                  projectId: project.id,
+                })
+              }}
+            >
+              End broadcast
+            </button>
+          )}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            marginLeft: '20%',
+            marginTop: '-2%',
+            position: 'absolute',
+          }}
+        >
+          <div>
+            <span>
+              Overlays
+              <ul style={{ listStyle: 'none' }}>
+                {overlays.map((overlay) => (
+                  <li
+                    key={overlay.id}
+                    onClick={() => {
+                      if (selectedImage !== overlay.id) {
+                        setSelectedImage(overlay.id)
+                        projectCommands.addImageOverlay2(overlay.id, {
+                          src: overlay.url,
+                        })
+                      } else {
+                        projectCommands.removeImageOverlay2(selectedImage)
+                        setSelectedImage(null)
+                      }
+                    }}
+                  >
+                    <img width="40px" height="50px" src={overlay.url} />
+                  </li>
+                ))}
+              </ul>
+            </span>
+          </div>
+          <div>
+            <span>
+              Video clips
+              <ul style={{ listStyle: 'none' }}>
+                {videooverlays.map((overlay) => (
+                  <li
+                    key={overlay.id}
+                    onClick={() => {
+                      if (selectedVideo !== overlay.id) {
+                        setSelectedVideo(overlay.id)
+                        projectCommands.addVideoOverlay2(overlay.id, {
+                          src: overlay.url,
+                          loop: true,
+                        })
+                      } else {
+                        projectCommands.removeVideoOverlay2(selectedVideo)
+                        setSelectedVideo(null)
+                      }
+                    }}
+                  >
+                    <video width="40px" height="50px" src={overlay.url} />
+                  </li>
+                ))}
+              </ul>
+            </span>
+          </div>
+          <div>
+            <span>
+              Logos
+              <ul style={{ listStyle: 'none' }}>
+                {logos.map((logo) => (
+                  <li
+                    key={logo.id}
+                    onClick={() => {
+                      if (selectedImage !== logo.id) {
+                        setSelectedImage(logo.id)
+                        projectCommands.addLogo(logo.id, {
+                          src: logo.url,
+                        })
+                      } else {
+                        projectCommands.removeLogo(selectedImage)
+                        setSelectedImage(null)
+                      }
+                    }}
+                  >
+                    <img width="40px" height="50px" src={logo.url} />
+                  </li>
+                ))}
+              </ul>
+            </span>
+          </div>
+        </div>
+      </div>
       <div
         className={Style.row}
-        style={{ width: '100%', justifyContent: 'flex-end', marginTop: 5 }}
+        style={{
+          marginTop: 14,
+          marginBottom: 8,
+          background: '#242533',
+          padding: 10,
+        }}
       >
-        {!isLive ? (
-          <button
-            onClick={async () => {
-              await studio.Command.setDestination({
-                projectId: project.id,
-                rtmpKey: streamKey,
-                rtmpUrl,
-              })
-              studio.Command.startBroadcast({
-                projectId: project.id,
-              })
-            }}
-          >
-            Go Live
-          </button>
-        ) : (
-          <button
-            onClick={() => {
-              studio.Command.stopBroadcast({
-                projectId: project.id,
-              })
-            }}
-          >
-            End broadcast
-          </button>
-        )}
+        <Participants
+          room={room}
+          projectCommands={projectCommands}
+          studio={studio}
+        />
+        <div
+          className={Style.column}
+          style={{ marginLeft: 14, marginBottom: 14 }}
+        >
+          <div className={Style.column}>
+            <label>Background URL</label>
+            <input
+              type="text"
+              defaultValue={background}
+              onChange={(e) => {
+                if (/\.(gif|jpe?g|tiff?|png|webp|bmp)$/i.test(e.target.value)) {
+                  //          projectCommands.setBackgroundImage(e.target.value)
+                  projectCommands.setBackgroundImage2(generateId(), {
+                    src: e.target.value,
+                  })
+                } else {
+                  //            projectCommands.setBackgroundVideo(e.target.value)
+                  // projectCommands.setBackgroundVideo2(generateId(), {
+                  //   src: e.target.value,
+                  // })
+                  projectCommands.addCustomOverlay(generateId(), {
+                    src: e.target.value,
+                    width: '1920px',
+                    height: '1080px',
+                  })
+                }
+              }}
+            />
+          </div>
+          <div className={Style.column}>
+            <label>CHat Overlay</label>
+            <input
+              type="button"
+              defaultValue={background}
+              onClick={(e) => {
+                projectCommands.addChatOverlay(generateId(), {
+                  message: JSON.parse(
+                    '[{"type":"text","text":"is now live! Streaming Mobile Legends: Bang Bang: My Stream "},{"type":"emoticon","text":"SirUwU","data":{"type":"direct","url":"https://static-cdn.jtvnw.net/emoticons/v2/301544927/default/light/2.0"}},{"type":"text","text":" Hey hey hey!!! this is going live "},{"type":"emoticon","text":"WutFace","data":{"type":"direct","url":"https://static-cdn.jtvnw.net/emoticons/v2/28087/default/light/2.0"}},{"type":"text","text":" , so lets go"}]',
+                  ),
+                  username: 'Maddygoround',
+                  metadata: {
+                    platform : "twitch",
+                    variant: 0,
+                    avatar:
+                      'https://inf2userdata0wus.blob.core.windows.net/content/62cc383fec1b480054cc2fde/resources/video/EchoBG.mp4/medium.jpg',
+                  },
+                })
+              }}
+            />
+          </div>
+          <div className={Style.column}>
+            <label>Add Banner</label>
+            <input
+              type="button"
+              defaultValue={background}
+              onClick={(e) => {
+                projectCommands.addBanner({
+                  bodyText: `hey hey hey ${Date.now()}`,
+                })
+              }}
+            />
+          </div>
+          <div className={Style.column}>
+            <label>Set Banner</label>
+            <input
+              type="button"
+              defaultValue={background}
+              onClick={(e) => {
+                const randomIndex = randomIntFromInterval(0, banners.length - 1)
+                projectCommands.setActiveBanner(banners[randomIndex].id)
+              }}
+            />
+          </div>
+          <div className={Style.column}>
+            <label>Layout</label>
+            <select
+              defaultValue={layout}
+              onChange={(e) => {
+                const { layout, props } = getLayout(e.target.value)
+                projectCommands.setLayout(layout, props)
+
+                // Store our custom layout configuration by name
+                studio.Command.updateProjectMeta({
+                  projectId: project.id,
+                  meta: {
+                    layout: e.target.value,
+                  },
+                })
+              }}
+            >
+              {layouts.map((x) => (
+                <option key={x} value={x}>
+                  {x}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div ref={renderContainer} style={{ width: 840, height: 500 }}></div>
+          <div className={Style.row}>
+            <DeviceSelection />
+            <div
+              style={{
+                marginLeft: 20,
+                marginTop: 12,
+              }}
+            >
+              <ControlPanel room={room} projectCommands={projectCommands} />
+            </div>
+          </div>
+        </div>
+        <div style={{ marginLeft: 14 }}>
+          <Chat />
+        </div>
       </div>
       <div className={Style.column}>
         <label>Preview URL</label>
@@ -308,17 +530,22 @@ const Top = ({
           style={{ width: 630 }}
         />
       </div>
-    </Column>
+    </div>
   )
 }
 
 export const HostView = () => {
-  const { studio, project, room, setProject, setRoom, setStudio } = useStudio()
+  const {
+    studio,
+    project,
+    projectCommands,
+    room,
+    setProject,
+    setRoom,
+    setStudio,
+  } = useStudio()
   const [token, setToken] = useState<string>(localStorage['token'])
   const [failure, setFailure] = useState<string>(null)
-  const [projectType, setProjectType] = useState<keyof typeof projects>(
-    localStorage['projectType'],
-  )
 
   // Store as a global for debugging in console
   window.SDK = useStudio()
@@ -352,9 +579,17 @@ export const HostView = () => {
         // If there's a project, return it - otherwise create one
         let project = user.projects[0]
         if (!project) {
-          project = await studio.Command.createProject({
-            settings: projects[projectType].settings,
-          })
+          const { layout, props } = getLayout(DEFAULT_LAYOUT)
+          project = await ScenelessProject.create(
+            {
+              backgroundImage: getUrl() + 'bg.png',
+              layout,
+              layoutProps: props,
+            },
+
+            // Store our custom layout in metadata for future reference
+            { layout: DEFAULT_LAYOUT },
+          )
         }
         const activeProject = await studio.Command.setActiveProject({
           projectId: project.id,
@@ -371,7 +606,7 @@ export const HostView = () => {
         setToken(null)
         localStorage.removeItem('token')
       })
-  }, [studio, token])
+  }, [studio, token, project])
 
   useEffect(() => {
     if (room) {
@@ -380,28 +615,21 @@ export const HostView = () => {
   }, [room])
 
   useEffect(() => {
-    if (project) {
-    }
-  }, [project])
+    if (!projectCommands || !room) return
+    // Prune non-existent participants from the project
+    projectCommands.pruneParticipants()
+  }, [projectCommands, room])
 
   if (project && room) {
-    const Project = projects[projectType].Component
-    return (
-      <Column>
-        <Top studio={studio} project={project} />
-        <Project project={project} Command={studio.Command} />
-      </Column>
-    )
+    return <Project />
   }
   if (studio && !token) {
     return (
       <Login
-        onLogin={({ userName, token, projectType }) => {
-          setProjectType(projectType)
+        onLogin={({ userName, token }) => {
           setToken(token)
           localStorage.setItem('userName', userName)
           localStorage.setItem('token', token)
-          localStorage.setItem('projectType', projectType)
         }}
       />
     )

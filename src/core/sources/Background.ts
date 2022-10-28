@@ -90,5 +90,3 @@ export const Background = {
     })
   },
 } as SourceDeclaration
-
-export const Declaration = Background

@@ -27,5 +27,3 @@ export const Square = {
     }
   },
 } as Compositor.Transform.TransformDeclaration
-
-export const Declaration = Square

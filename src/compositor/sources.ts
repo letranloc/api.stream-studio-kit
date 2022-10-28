@@ -4,61 +4,67 @@
  * -------------------------------------------------------------------------------------------- */
 import { CoreContext } from '../core/context'
 import { Disposable } from '../core/types'
-import { asArray, pick, deepEqual } from '../logic'
+import { asArray, pick } from '../logic'
 import type {
   PropsDefinition,
   CompositorInstance,
   CompositorBase,
-  SceneNode,
 } from './compositor'
 
-type SourceProps = {
-  [prop: string]: any
-}
+type SourceMethods = Pick<
+  SourceManager,
+  | 'getSource'
+  | 'removeSource'
+  | 'updateSource'
+  | 'setSourceActive'
+  | 'modifySourceValue'
+> & { addSource: (source: NewSource) => void }
 
-type SourceContext = {
-  on: CompositorInstance['on']
-  triggerEvent: CompositorInstance['triggerEvent']
-}
-
-type SourceMethods<Props = SourceProps, Value = {}> = {
-  load?: (methods: ReturnType<SourceManager['wrap']>) => Disposable | void
-  onChange: (value: Value, props: Props) => { value: Value; isActive?: boolean }
-  /** Get the initial value of a Source */
-  getValue: (props: Props) => { value: Value; isActive?: boolean }
-}
-
-export type SourceDeclaration<Props = {}, Value = {}> = {
+export type SourceDeclaration = {
   /** The type to declare support for (e.g. 'MediaStreamVideo') */
   type: string
+  /**
+   * The value-type constructor of a Source (e.g. MediaStream)
+   *  Used for run-time validation.
+   *
+   * This is an approximation of the actual type
+   *  definition of Source.value
+   */
+  valueType: any
   /** The properties associated with an individual Source */
   props?: PropsDefinition
-  init?: (context: SourceContext) => void | SourceMethods<Props, Value>
+  init?: (methods: SourceMethods) => void
 }
 
-export type NodeSource<Props = SourceProps> = {
+export type Source = {
   id: string
+  type: string // 'MediaStreamVideo' | 'HLSMedia' | 'DOMVideo' | 'DOMImage' | ...
+  /** Indicates whether a source is ready to be rendered to the page */
+  isActive: boolean
   /**
    * Properties matching the schema supplied to SourceDeclaration for this Source type
    * */
-  props: Props
+  props: { [prop: string]: any }
+  value: any // MediaStreamTrack | Image | String | ...
 }
 
-export type Source<Props = SourceProps, Value = unknown> = NodeSource<Props> & {
-  type?: string // 'MediaStreamVideo' | 'HLSMedia' | 'DOMVideo' | 'DOMImage' | ...
+export type NewSource = {
+  id: string
+  value: any
   /**
-   * A source may be set `isActive=false` to indicate that dependent elements
+   * A source may be set `inActive` to indicate that dependent elements
    *  should perhaps seek an alternative source.
    *
    * e.g. A webcam feed has been interrupted, but may come back online at any time.
    */
   isActive?: boolean
-  value: Value // MediaStreamTrack | Image | String | ...
+  props?: { [prop: string]: any }
 }
 
 export type SourceMap = {
   [type: string]: SourceDeclaration
 }
+export const sourceTypes = {} as SourceMap
 
 export type SourceRegister = (
   declaration: SourceDeclaration | SourceDeclaration[],
@@ -67,42 +73,10 @@ export type SourceRegister = (
 // Note: Currently no settings are supported
 export type SourceSettings = {}
 
-export const getSourceDifference = <T extends NodeSource>(
-  previousSources: T[] = [],
-  newSources: T[] = [],
-) => {
-  return {
-    added: newSources.filter(
-      (source) => !previousSources.some((x) => x.id === source.id),
-    ),
-    removed: previousSources.filter(
-      (source) => !newSources.some((x) => x.id === source.id),
-    ),
-    changed: newSources.filter((source) => {
-      const existing = previousSources.find((x) => x.id === source.id)
-      if (!existing) return false
-      return !deepEqual(source, existing)
-    }),
-  }
-}
-
 export const init = (
   settings: SourceSettings = {},
   compositor: CompositorBase,
 ) => {
-  const sourceTypes = {} as SourceMap
-  const sourceMethods = {} as {
-    [type: string]: SourceMethods
-  }
-
-  const nodeIndex = {} as {
-    [id: string]: ReturnType<typeof wrap>
-  }
-  const nodeLoadedIndex = {} as {
-    [id: string]: {
-      [type: string]: Disposable
-    }
-  }
   const sourceIndex = {} as {
     [id: string]: Source
   }
@@ -110,301 +84,139 @@ export const init = (
     [type: string]: Source[] // Array of source IDs by type
   }
 
-  const registerSource: SourceRegister = (declaration) => {
-    asArray(declaration).forEach((x) => {
-      // TODO: Validation / ensure type isn't already registered
-      // TODO: Dispose of existing sources if a new one is registered with the same type
-      sourceMethods[x.type] = {
-        getValue: () => ({ value: null }),
-        onChange: () => ({ value: null }),
-        load: () => () => {},
-        ...x.init?.({
-          on: compositor.on,
-          triggerEvent: compositor.triggerEvent,
-        } as SourceContext),
-      }
-      sourceTypes[x.type] = x
-      sourceTypeIndex[x.type] = []
+  const handleSourceChanged = (source: Source) => {
+    compositor.triggerEvent('SourceChanged', source)
+  }
+
+  const handleSourcesChanged = (type: string) => {
+    compositor.triggerEvent('AvailableSourcesChanged', {
+      type,
+      sources: sourceTypeIndex[type],
     })
   }
 
-  compositor.on('NodeRemoved', ({ nodeId, projectId }) => {
-    if (nodeIndex[nodeId]) nodeIndex[nodeId].unload()
-    delete nodeIndex[nodeId]
-  })
-
-  const wrap = (node: SceneNode) => {
-    const project = compositor.getNodeProject(node.id)
-
-    nodeLoadedIndex[node.id] = {}
-
-    const nodeSourceIndex = {} as {
-      [id: string]: Source
-    }
-    const nodeSourceTypeIndex = {} as {
-      [type: string]: Source[]
-    }
-
-    const handleSourceChanged = (source: Source) => {
-      if (sourceMethods[source.type].onChange) {
-        const { value, isActive = true } = sourceMethods[
-          source.type
-        ].onChange(source.value, source.props)
-        source.value = value
-        source.isActive = isActive
+  const registerSource: SourceRegister = (declaration) => {
+    asArray(declaration).forEach((x) => {
+      const _ensureEditPermission = (sourceId: string) => {
+        const source = sourceIndex[sourceId]
+        if (!source) return
+        if (source.type === x.type) return
+        throw new Error(
+          `Attempted to modify source of type ${source.type} from ${x.type}`,
+        )
       }
-      compositor.triggerEvent('SourceChanged', source)
-    }
 
-    const handleSourcesChanged = (type: string) => {
-      compositor.triggerEvent('AvailableSourcesChanged', {
-        type,
-        sources: sourceTypeIndex[type] || [],
-        nodeId: node.id,
+      // TODO: Validation / ensure type isn't already registered
+      // TODO: Dispose of existing sources if a new one is registered with the same type
+      x.init?.({
+        getSource: (id: string) => sourceManager.getSource(id),
+        removeSource: (id) => {
+          _ensureEditPermission(id)
+          return sourceManager.removeSource(id)
+        },
+        setSourceActive: (id, isActive) => {
+          _ensureEditPermission(id)
+          return sourceManager.setSourceActive(id, isActive)
+        },
+        updateSource: (id, props) => {
+          _ensureEditPermission(id)
+          return sourceManager.updateSource(id, props)
+        },
+        modifySourceValue(id, cb) {
+          _ensureEditPermission(id)
+          return sourceManager.modifySourceValue(id, cb)
+        },
+        addSource: (source: NewSource) =>
+          sourceManager.addSource(x.type, source),
+      } as SourceMethods)
+      sourceTypes[x.type] = x
+    })
+  }
+
+  const sourceManager = {
+    sourceIndex,
+    sourceTypeIndex,
+    registerSource,
+    getSource: (id: string) => {
+      return sourceIndex[id]
+    },
+    getSources: (type: string): Source[] => {
+      return sourceTypeIndex[type] || []
+    },
+    useSource: (id: string, cb: (source: Source) => void): Disposable => {
+      cb(sourceIndex[id])
+      return compositor.on('SourceChanged', (payload: Source) => {
+        if (payload.id !== id) return
+        cb(payload)
       })
-    }
-
-    const createSource = (type: string, source: NodeSource): Source => {
+    },
+    useSources: (type: string, cb: (sources: Source[]) => void): Disposable => {
+      cb(sourceTypeIndex[type] || [])
+      return compositor.on('AvailableSourcesChanged', (payload) => {
+        if (payload.type !== type) return
+        cb(payload.sources)
+      })
+    },
+    addSource: (type: string, source: NewSource): void => {
       if (!source.id) throw new Error('Cannot add source without field "id"')
-      if (sourceIndex[source.id]) return sourceIndex[source.id] // Already added
+      if (sourceIndex[source.id]) return // Already added
+
+      if (!source.value)
+        throw new Error('Cannot add source with an empty field "value"')
 
       const sourceDeclaration = sourceTypes[type]
       if (!sourceDeclaration)
         throw new Error('Could not find definition for source type: ' + type)
 
-      const { id, props = {} } = source
-      const { value, isActive = true } = sourceMethods[type].getValue(props)
-
-      const fullSource = {
+      const { id, value = null, props = {}, isActive = true } = source
+      sourceIndex[id] = {
         id,
         type,
         props,
         value,
         isActive,
       }
-      sourceIndex[id] = fullSource
-      nodeSourceIndex[id] = fullSource
-      sourceTypeIndex[type] = [...sourceTypeIndex[type], fullSource]
-      nodeSourceTypeIndex[type] = [...nodeSourceTypeIndex[type], fullSource]
-      return fullSource
-    }
-
-    const deleteSource = (id: string) => {
+      sourceTypeIndex[type] = [
+        ...(sourceTypeIndex[type] || []),
+        sourceIndex[id],
+      ]
+      handleSourceChanged(sourceIndex[id])
+      handleSourcesChanged(type)
+    },
+    removeSource: (id: string): void => {
       const source = sourceIndex[id]
       if (!source) return
-
-      delete sourceIndex[source.id]
-      delete nodeSourceIndex[source.id]
+      delete sourceIndex[id]
       sourceTypeIndex[source.type] = sourceTypeIndex[source.type].filter(
-        (x) => x.id !== source.id,
+        (x) => x.id !== id,
       )
-      nodeSourceTypeIndex[source.type] = nodeSourceTypeIndex[
-        source.type
-      ].filter((x) => x.id !== source.id)
-    }
-
-    const toNodeSource = (source: Source): NodeSource => ({
-      id: source.id,
-      props: source.props,
-    })
-
-    const getNodeSources = (type: string) => node.props.sources?.[type] || []
-
-    const updateNodeSources = (type: string, sources: NodeSource[]) => {
-      project.update(node.id, {
-        ...node.props,
-        sources: {
-          ...node.props.sources,
-          [type]: sources.map(toNodeSource),
-        },
-      })
-    }
-
-    const nodeSourceMethods = {
-      get: <S extends Source = Source>(id: string) => {
-        return nodeSourceIndex[id] as S
-      },
-      getAll: <S extends Source = Source>(type: string): Source[] => {
-        return (nodeSourceTypeIndex[type] as S[]) || []
-      },
-      use: <S extends Source = Source>(
-        id: string,
-        cb: (source: S) => void,
-      ): Disposable => {
-        cb(nodeSourceIndex[id] as S)
-        return compositor.on('SourceChanged', (payload: S) => {
-          if (payload.id !== id) return
-          cb(payload)
-        })
-      },
-      useAll: <S extends Source = Source>(
-        type: string,
-        cb: (sources: S[]) => void,
-      ): Disposable => {
-        cb((nodeSourceTypeIndex[type] as S[]) || [])
-        return compositor.on('AvailableSourcesChanged', (payload) => {
-          if (payload.type !== type) return
-          if (payload.nodeId !== node.id) return
-          cb(payload.sources as S[])
-        })
-      },
-      add: async (type: string, source: NodeSource) => {
-        const fullSource = createSource(type, source)
-
-        await updateNodeSources(type, [
-          ...(getNodeSources(type) || []),
-          toNodeSource(fullSource),
-        ])
-
-        handleSourceChanged(fullSource)
-        handleSourcesChanged(type)
-      },
-      remove: async (id: string) => {
-        const source = sourceIndex[id]
-        if (!source) return
-
-        const type = source.type
-        deleteSource(source.id)
-
-        await updateNodeSources(
-          type,
-          getNodeSources(type).filter((x) => x.id !== id),
-        )
-
-        handleSourcesChanged(source.type)
-      },
-      update: async (id: string, props: Source['props']) => {
-        // Update the Source in memory imperatively
-        const fullSource = sourceIndex[id]
-        fullSource.props = {
-          ...fullSource.props,
-          ...props,
-        }
-
-        // Update the NodeSource
-        await updateNodeSources(
-          fullSource.type,
-          getNodeSources(fullSource.type).map((x) => {
-            if (x.id !== id) return x
-            return toNodeSource(fullSource)
-          }),
-        )
-
-        handleSourceChanged(fullSource)
-        handleSourcesChanged(fullSource.type)
-      },
-      reset: async (type: string, newSources: NodeSource[] = []) => {
-        const existing = getNodeSources(type)
-        const difference = getSourceDifference(existing, newSources)
-
-        // Update nodes in index
-        nodeSourceTypeIndex[type].forEach((existing) => {
-          newSources.forEach((x) => {
-            if (x.id === existing.id) {
-              existing.props = x.props
-              handleSourceChanged(existing)
-            }
-          })
-        })
-
-        // Remove sources from index
-        difference.removed.forEach((x) => deleteSource(x.id))
-
-        // Add sources to index
-        difference.added.forEach((x) => {
-          createSource(type, x)
-        })
-
-        await updateNodeSources(type, newSources)
-        handleSourcesChanged(type)
-        // TODO: Do we need to handleSourceChanged() for each new source?
-      },
-      /**
-       * Imperatively update a Source's value.
-       * Triggers an event to inform elements to re-render.
-       */
-      modifyValue: async (
-        id: string,
-        cb: (value: Source['value']) => void,
-      ): Promise<void> => {
-        const source = sourceIndex[id]
-        await cb(source.value)
-        handleSourceChanged(source)
-      },
-      setActive: (id: string, isActive: boolean = true): void => {
-        const source = sourceIndex[id]
-        source.isActive = isActive
-        handleSourcesChanged(source.type)
-      },
-      unload: async () => {
-        await Promise.all(
-          Object.keys(node.props.sources || {}).map((type) =>
-            nodeSourceMethods.reset(type),
-          ),
-        )
-        Object.values(loadedSources).forEach((unload) => {
-          unload()
-        })
-      },
-    }
-    nodeIndex[node.id] = nodeSourceMethods
-
-    let loadedSources = {} as { [type: string]: Disposable }
-    const loadSourceTypeForNode = (type: string) => {
-      if (!sourceMethods[type]) {
-        console.warn('Source type is unavailable for node:', { node, type })
-        return
+      handleSourcesChanged(source.type)
+    },
+    updateSource: (id: string, props: Source['props']): void => {
+      const source = sourceIndex[id]
+      source.props = {
+        ...source.props,
+        ...props,
       }
-      if (loadedSources[type]) return
-      loadedSources[type] =
-        sourceMethods[type].load(nodeSourceMethods) || (() => {})
-      sourceTypeIndex[type] = sourceTypeIndex[type] || []
-      nodeSourceTypeIndex[type] = []
-    }
-    const nodeSourceTypes = [...Object.keys(node.props.sources || {})]
-    nodeSourceTypes.forEach(loadSourceTypeForNode)
-
-    // Index the NodeSources as Sources
-    const sources = node.props.sources || {}
-    Object.keys(sources).forEach((type) =>
-      sources[type].forEach((x) => createSource(type, x)),
-    )
-
-    return nodeSourceMethods
-  }
-
-  const sourceManager = {
-    sourceTypes,
-    registerSource,
-    getSource: <S extends Source = Source>(id: string) => {
-      return sourceIndex[id] as S
+      handleSourceChanged(source)
+      handleSourcesChanged(source.type)
     },
-    getSources: <S extends Source = Source>(type: string): Source[] => {
-      return sourceTypeIndex[type] as S[]
-    },
-    useSource: <S extends Source = Source>(
+    /**
+     * Imperatively update a Source's value.
+     * Triggers an event to inform elements to re-render.
+     */
+    modifySourceValue: async (
       id: string,
-      cb: (source: S) => void,
-    ): Disposable => {
-      cb(sourceIndex[id] as S)
-      return compositor.on('SourceChanged', (payload: S) => {
-        if (payload.id !== id) return
-        cb(payload)
-      })
+      cb: (value: Source['value']) => void,
+    ): Promise<void> => {
+      const source = sourceIndex[id]
+      await cb(source.value)
+      handleSourceChanged(source)
     },
-    useSources: <S extends Source = Source>(
-      type: string,
-      cb: (sources: S[]) => void,
-    ): Disposable => {
-      cb(sourceTypeIndex[type] as S[])
-      return compositor.on('AvailableSourcesChanged', (payload) => {
-        if (payload.type !== type) return
-        cb(payload.sources as S[])
-      })
-    },
-    wrap(node: SceneNode) {
-      if (nodeIndex[node.id]) return nodeIndex[node.id]
-      return wrap(node)
+    setSourceActive: (id: string, isActive: boolean = true): void => {
+      const source = sourceIndex[id]
+      source.isActive = isActive
+      handleSourcesChanged(source.type)
     },
   }
   return sourceManager
