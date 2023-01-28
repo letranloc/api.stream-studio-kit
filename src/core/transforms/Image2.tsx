@@ -2,7 +2,7 @@
  * Copyright (c) Infiniscene, Inc. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
-import ReactDOM from 'react-dom'
+import ReactDOM from 'react-dom/client'
 import React from 'react'
 import { Compositor } from '../namespaces'
 import APIKitAnimation from '../../compositor/html/html-animation'
@@ -22,6 +22,7 @@ export const Image2 = {
   },
   create({ onUpdate, onNewSource }, initialProps) {
     const root = document.createElement('div')
+    let rootRoot: ReactDOM.Root
     let source: any
 
     const Image = ({ source }: { source: any }) => {
@@ -43,7 +44,10 @@ export const Image2 = {
       )
     }
 
-    const render = () => ReactDOM.render(<Image source={source} />, root)
+    const render = () => {
+      rootRoot ??= ReactDOM.createRoot(root)
+      rootRoot.render(<Image source={source} />)
+    }
 
     onUpdate(() => {
       render()

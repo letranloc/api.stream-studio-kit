@@ -2,7 +2,7 @@
  * Copyright (c) Infiniscene, Inc. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
-import ReactDOM from 'react-dom'
+import ReactDOM from 'react-dom/client'
 import React, { useEffect } from 'react'
 import { Compositor } from '../namespaces'
 import Iframe from './components/Iframe'
@@ -24,6 +24,7 @@ export const Overlay = {
   },
   create({ onUpdate, onNewSource }, initialProps) {
     const root = document.createElement('div')
+    let rootRoot: ReactDOM.Root
     let source: any
 
     const IFrame = ({ source }: { source: any }) => {
@@ -82,7 +83,10 @@ export const Overlay = {
       )
     }
 
-    const render = () => ReactDOM.render(<IFrame source={source} />, root)
+    const render = () => {
+      rootRoot ??= ReactDOM.createRoot(root)
+      rootRoot.render(<IFrame source={source} />)
+    }
 
     onUpdate(() => {
       render()

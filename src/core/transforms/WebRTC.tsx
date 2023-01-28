@@ -2,7 +2,7 @@
  * Copyright (c) Infiniscene, Inc. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
-import ReactDOM from 'react-dom'
+import ReactDOM from 'react-dom/client'
 import React, { useLayoutEffect, useState } from 'react'
 import { isMatch } from 'lodash-es'
 import { useEffect, useRef } from 'react'
@@ -40,6 +40,7 @@ export const RoomParticipant = {
   },
   create({ onUpdate, onNewSource, onRemove }, initialProps) {
     const root = document.createElement('div')
+    let rootRoot: ReactDOM.Root
     // TODO: Transforms should not rely on external state
     const project = getProject(CoreContext.state.activeProjectId)
     const room = getProjectRoom(CoreContext.state.activeProjectId)
@@ -277,7 +278,10 @@ export const RoomParticipant = {
     }
 
     const render = () =>
-      ReactDOM.render(<Participant source={source} props={props} />, root)
+      {
+        rootRoot ??= ReactDOM.createRoot(root)
+        rootRoot.render(<Participant source={source} props={props} />)
+      }
 
     onUpdate((_props) => {
       props = _props

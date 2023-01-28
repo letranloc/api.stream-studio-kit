@@ -2,7 +2,7 @@
  * Copyright (c) Infiniscene, Inc. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
-import ReactDOM from 'react-dom'
+import ReactDOM from 'react-dom/client'
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Compositor } from '../namespaces'
 import * as Colors from '../../helpers/colors'
@@ -105,6 +105,7 @@ export const ChatOverlay = {
   sourceType: 'ChatOverlay',
   create({ onUpdate, onEvent }, initialProps) {
     const root = document.createElement('div')
+    let rootRoot: ReactDOM.Root
     const project = getProject(CoreContext.state.activeProjectId)
     const projectRoot = project.compositor.getRoot()
 
@@ -439,7 +440,10 @@ export const ChatOverlay = {
     }
 
     const render = (rest: ChatOverlayProps) =>
-      ReactDOM.render(<ChatOverlay {...rest} />, root)
+      {
+         rootRoot ??= ReactDOM.createRoot(root)
+         rootRoot.render(<ChatOverlay {...rest} />)
+      }
 
     /* It's a callback that is called when the props are updated. */
     onUpdate((props: ChatOverlayProps) => {

@@ -2,7 +2,7 @@
  * Copyright (c) Infiniscene, Inc. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
-import ReactDOM from 'react-dom'
+import ReactDOM from 'react-dom/client'
 import React, { useEffect, useState } from 'react'
 import { Compositor } from '../namespaces'
 import { BannerSource } from '../sources/Banners'
@@ -22,6 +22,7 @@ export const Banner = {
   },
   create({ onUpdate, onNewSource }, initialProps) {
     const root = document.createElement('div')
+    let rootRoot: ReactDOM.Root
     let source: BannerSource | null
     let latestSource: BannerSource
     let previousSource: BannerSource
@@ -100,24 +101,24 @@ export const Banner = {
     }
 
     const render = () =>
-      ReactDOM.render(
-        <>
-          {/* Preserve previous source for animation out */}
-          {previousSource && previousSource.id !== latestSource.id && (
+    {
+        rootRoot ??= ReactDOM.createRoot(root)
+        rootRoot.render(
+          <>
+            {/* Preserve previous source for animation out */}
+            {previousSource && previousSource.id !== latestSource.id && (
+              <Banner
+                key={previousSource?.id}
+                currentSource={null}
+                latestSource={previousSource} />
+            )}
             <Banner
-              key={previousSource?.id}
-              currentSource={null}
-              latestSource={previousSource}
-            />
-          )}
-          <Banner
-            key={latestSource?.id}
-            currentSource={source}
-            latestSource={latestSource}
-          />
-        </>,
-        root,
-      )
+              key={latestSource?.id}
+              currentSource={source}
+              latestSource={latestSource} />
+          </>
+        )
+      }
 
     onUpdate(() => {
       render()

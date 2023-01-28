@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
 import React, { useContext, useEffect, useRef, useState } from 'react'
-import ReactDOM from 'react-dom'
+import ReactDOM from 'react-dom/client'
 import { swapItems } from '../logic'
 import { getProject } from '../core/data'
 import { CoreContext, log, InternalProject } from '../core/context'
@@ -419,6 +419,7 @@ const Root = (props: { setStyle: (CSS: string) => void }) => {
 }
 
 let wrapperEl: HTMLElement
+let wrapperElRoot: ReactDOM.Root
 let customStyleEl: HTMLStyleElement
 
 const PADDING = 0
@@ -510,7 +511,8 @@ export const render = (settings: CompositorSettings) => {
   }
 
   const render = () => {
-    ReactDOM.render(
+    wrapperElRoot ??= ReactDOM.createRoot(wrapperEl)
+    wrapperElRoot.render(
       <CompositorProvider
         project={project}
         interactive={dragAndDrop}
@@ -524,7 +526,6 @@ export const render = (settings: CompositorSettings) => {
           }}
         />
       </CompositorProvider>,
-      wrapperEl,
     )
   }
 

@@ -6,6 +6,7 @@ import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import { babel } from '@rollup/plugin-babel'
 import packageJSON from './package.json'
+import react from '@vitejs/plugin-react'
 // import polyfillNode from 'rollup-plugin-polyfill-node'
 
 // https://vitejs.dev/config/
@@ -16,6 +17,7 @@ export default defineConfig({
       babelHelpers: 'bundled',
       extensions: ['.ts', '.tsx'],
     }),
+    react()
   ],
   define: {
     SDK_VERSION: JSON.stringify(packageJSON.version),
@@ -25,7 +27,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Externalize deps that shouldn't be bundled
-      external: ['react', 'react-dom'],
+      external: ['react', 'react-dom', 'react-dom/client'],
       output: {
         inlineDynamicImports: true,
       },

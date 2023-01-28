@@ -2,7 +2,7 @@
  * Copyright (c) Infiniscene, Inc. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
-import ReactDOM from 'react-dom'
+import ReactDOM from 'react-dom/client'
 import React from 'react'
 import { CoreContext } from '../context'
 import { getProject, getProjectRoom } from '../data'
@@ -46,6 +46,7 @@ export const Video2 = {
     })
 
     const root = document.createElement('div')
+    let rootRoot: ReactDOM.Root
     const room = getProjectRoom(CoreContext.state.activeProjectId)
     const role = getProject(CoreContext.state.activeProjectId).role
 
@@ -199,7 +200,10 @@ export const Video2 = {
       )
     }
 
-    const render = () => ReactDOM.render(<Video source={source} />, root)
+    const render = () => {
+       rootRoot ??= ReactDOM.createRoot(root)
+       rootRoot.render(<Video source={source} />)
+    }
 
     onUpdate(() => {
       render()
