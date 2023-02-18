@@ -3,16 +3,16 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
 import {
-  connect,
   ParticipantEvent,
   Room,
   RoomEvent,
   Participant,
   DataPacket_Kind,
-  ConnectOptions,
+  RoomConnectOptions,
   AudioTrack,
-  RoomState,
+  ConnectionState,
   RemoteParticipant,
+  setLogLevel
 } from 'livekit-client'
 import { ApiStream, LiveKitUtils } from '@api.stream/sdk'
 import * as LiveKitServer from '@api.stream/livekit-server-sdk'
@@ -140,7 +140,7 @@ export interface LSRoomContext {
    * Must be done before connecting in order to do admin actions.
    */
   bindApiClient: (client: ApiStream) => void
-  connect: (options?: ConnectOptions) => Promise<Room>
+  connect: (options?: RoomConnectOptions) => Promise<Room>
   /**
    * Array of chat messages in ascending chronological order
    */
@@ -549,7 +549,7 @@ export class RoomContext implements LSRoomContext {
   private _updateParticipants() {
     if (
       !this.livekitRoom ||
-      this.livekitRoom.state === RoomState.Disconnected
+      this.livekitRoom.state === ConnectionState.Disconnected
     ) {
       this.participants = []
       return
@@ -676,7 +676,7 @@ export class RoomContext implements LSRoomContext {
    * connect to livekit webrtc room
    * @param {string} identity unique user name to be displayed to other users
    */
-  async connect(options: ConnectOptions = {}) {
+  async connect(options: RoomConnectOptions = {}) {
     try {
       if (this.livekitRoom && this.livekitRoom.state === 'connected') {
         return this.livekitRoom
@@ -684,11 +684,15 @@ export class RoomContext implements LSRoomContext {
       if (this.isConnecting) return null
       this.isConnecting = true
 
+      setLogLevel(CoreContext.logLevel as any);
+
       // Fetch token
-      this.livekitRoom = await connect(`wss://${this._baseUrl}`, this._jwt, {
-        logLevel: CoreContext.logLevel as any,
-        ...options,
-      })
+      this.livekitRoom = new Room();
+      await this.livekitRoom.connect(`wss://${this._baseUrl}`, this._jwt, {
+        peerConnectionTimeout: 30000,
+        maxRetries: 10,
+        ...options
+      });
 
       this.isConnecting = false
 
