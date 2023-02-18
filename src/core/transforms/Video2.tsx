@@ -62,8 +62,6 @@ export const Video2 = {
       const videoRef = React.useRef<HTMLVideoElement>(null)
       const [startAnimation, setStartAnimation] = React.useState(false)
 
-      console.log('Updated current time', videoRef?.current?.currentTime)
-
       React.useEffect(() => {
         setStartAnimation(false)
       }, [id])
