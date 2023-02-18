@@ -544,7 +544,7 @@ export interface Room {
   /**
    * Disconnect from the room.
    */
-  disconnect: () => void
+  disconnect: () => Promise<void>
   /**
    * Handle disconnection from the room.
    */
