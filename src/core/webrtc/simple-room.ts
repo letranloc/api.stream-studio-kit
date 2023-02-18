@@ -11,6 +11,7 @@ import {
   TrackPublication,
   Track,
   LocalTrack,
+  LocalVideoTrack,
   DataPacket_Kind,
 } from 'livekit-client'
 import { SDK } from '../namespaces'
@@ -209,6 +210,44 @@ export const getRoom = (id: string) => {
     },
     setMicrophoneEnabled: (enabled = true) => {
       return localParticipant.setMicrophoneEnabled(enabled)
+    },
+    setCustomCamera: async (stream) => {
+      if (settingCamera) {
+        log.warn("Cannot set camera until previous has resolved");
+        return;
+      }
+      settingCamera = true;
+      let published: LocalTrackPublication;
+
+      try {
+        const existingWebcams = localParticipant.getTracks().filter((x) => {
+          return x?.source === Track.Source.Camera;
+        });
+
+        const existingPrimaryWebCams = existingWebcams.filter((x) => {
+          const track = getTrack(x?.trackSid);
+          return !track.isExternal;
+        });
+
+        const track = new LocalVideoTrack(stream.getVideoTracks()[0], undefined, true);
+        track.source = Track.Source.Camera;
+        track.mediaStream = stream;
+
+        if (existingPrimaryWebCams?.find((x) => x.isMuted)) {
+          track.mute();
+        }
+
+        published = await localParticipant.publishTrack(track);
+
+        if (existingPrimaryWebCams?.length) {
+          await localParticipant.unpublishTracks(existingPrimaryWebCams.map((x) => x.track as LocalTrack));
+        }
+      } catch (e) {
+        throw e;
+      } finally {
+        settingCamera = false;
+        return getTrack(published?.trackSid);
+      }
     },
     setCamera: async (options = {}) => {
       if (settingCamera) {

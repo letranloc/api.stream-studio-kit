@@ -326,6 +326,11 @@ export interface Room {
    */
   participantId: string
   /**
+   * Set custom webcam {@link Track} and publish, replacing a Camera if it already exists
+   * @category Media
+   */
+  setCustomCamera: (stream: MediaStream) => Promise<Track>;
+  /**
    * Create webcam {@link Track} and publish, replacing a Camera if it already exists
    * @category Media
    */
