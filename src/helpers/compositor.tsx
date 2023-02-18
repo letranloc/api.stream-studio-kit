@@ -877,6 +877,19 @@ const themes = {
         opacity: 0;
         transform: translateX(-100%);
       }
+
+      .NameBanner[data-size="4"] .NameBanner-body {
+        font-size: ${scale(44)} !important;
+      }
+      .NameBanner[data-size="3"] .NameBanner-body {
+        font-size: ${scale(44)} !important;
+      }
+      .NameBanner[data-size="2"] .NameBanner-body {
+        font-size: ${scale(28)} !important;
+      }
+      .NameBanner[data-size="1"] .NameBanner-body, .NameBanner[data-size="0"] .NameBanner-body {
+        font-size: ${scale(20)} !important;
+      }
     `
   },
   [BannerStyle.MINIMAL]: (
@@ -1023,6 +1036,19 @@ const themes = {
         opacity: 0 !important;
         transform: translateX(-100%);
       }
+
+      .NameBanner[data-size="4"] .NameBanner-body {
+        font-size: ${scale(34)} !important;
+      }
+      .NameBanner[data-size="3"] .NameBanner-body {
+        font-size: ${scale(34)} !important;
+      }
+      .NameBanner[data-size="2"] .NameBanner-body {
+        font-size: ${scale(24)} !important;
+      }
+      .NameBanner[data-size="1"] .NameBanner-body, .NameBanner[data-size="0"] .NameBanner-body {
+        font-size: ${scale(18)} !important;
+      }
     `
   },
   [BannerStyle.BUBBLE]: (
@@ -1156,6 +1182,19 @@ const themes = {
       .NameBanner[data-size="0"] {
         opacity: 0 !important;
         transform: translateX(-100%);
+      }
+
+      .NameBanner[data-size="4"] .NameBanner-body {
+        font-size: ${scale(40)} !important;
+      }
+      .NameBanner[data-size="3"] .NameBanner-body {
+        font-size: ${scale(40)} !important;
+      }
+      .NameBanner[data-size="2"] .NameBanner-body {
+        font-size: ${scale(26)} !important;
+      }
+      .NameBanner[data-size="1"] .NameBanner-body, .NameBanner[data-size="0"] .NameBanner-body {
+        font-size: ${scale(18)} !important;
       }
     `
   },
