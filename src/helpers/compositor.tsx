@@ -690,49 +690,29 @@ export enum PlatformType {
 
 const themes = {
   [LogoPosition.TopLeft]: (scalar: number = 1280 / 1920) => {
-    const scale = (px: number) => px * scalar + 'px'
     return `
       .wrapper {
-       height: ${scale(135)};
-       width: ${scale(240)};
-       margin-top:${scale(40)} !important;
-       margin-left:${scale(40)} !important;
        top:0;
        left:0;
     }`
   },
   [LogoPosition.TopRight]: (scalar: number = 1280 / 1920) => {
-    const scale = (px: number) => px * scalar + 'px'
     return `
       .wrapper {
-       height: ${scale(135)};
-       width: ${scale(240)};
-       margin-top:${scale(40)} !important;
-       margin-right:${scale(40)} !important;
        top:0;
        right:0;
     }`
   },
   [LogoPosition.BottomLeft]: (scalar: number = 1280 / 1920) => {
-    const scale = (px: number) => px * scalar + 'px'
     return `
       .wrapper {
-       height: ${scale(135)};
-       width: ${scale(240)};
-       margin-bottom:${scale(40)} !important;
-       margin-left:${scale(40)} !important;
        bottom:0;
        left:0;
     }`
   },
   [LogoPosition.BottomRight]: (scalar: number = 1280 / 1920) => {
-    const scale = (px: number) => px * scalar + 'px'
     return `
       .wrapper {
-       height: ${scale(135)};
-       width: ${scale(240)};
-       margin-bottom:${scale(40)} !important;
-       margin-right:${scale(40)} !important;
        bottom:0;
        right:0;
     }`
@@ -831,7 +811,6 @@ const themes = {
         font-style: normal !important;
         font-weight: 700 !important;
         line-height: 120% !important;
-        font-size: ${scale(36)};
       }
 
       .NameBanner {
@@ -984,7 +963,6 @@ const themes = {
         font-style: normal !important;
         font-weight: 700 !important;
         line-height: 120% !important;
-        font-size: ${scale(36)};
         position: relative;
         z-index: 2;
       }
@@ -1136,7 +1114,6 @@ const themes = {
         font-style: normal !important;
         font-weight: 700 !important;
         line-height: 120% !important;
-        font-size: ${scale(36)};
       }
       .NameBanner {
         transform-origin: 0% 100%;

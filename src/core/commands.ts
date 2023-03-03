@@ -183,7 +183,7 @@ export const recreateLayout = async (payload: {
     })
 
   CoreContext.log.debug('New layout assigned to project:', { layout })
-    
+
   // Trigger event to update state
   await triggerInternal('ProjectChanged', { project: updateResponse.project })
 
@@ -205,9 +205,10 @@ export const recreateLayout = async (payload: {
     internalProject.compositor.getRoot().id,
     props,
   )
-  return toBaseProject(internalProject)
-}
 
+  /** return original project as well as internal project */
+  return { project: toBaseProject(internalProject), internalProject }
+}
 /**
  * Delete a project.
  *
@@ -616,20 +617,6 @@ export const reorderNodes = async (payload: {
 export const startBroadcast = async (payload: { projectId?: string }) => {
   const { projectId = state.activeProjectId } = payload
   const project = getProject(projectId)
-
-  if (project.videoApi.project.composition.studioSdk.version !== CoreContext.rendererVersion) {
-    await CoreContext.clients.LiveApi().project.updateProject({
-      composition: {
-        studioSdk: {
-          // hint: we're passing rendererUrl to ensure older projects function the same. A change
-          // was made where the live api doesn't store our internal renderer on this model.
-          rendererUrl: undefined,
-          version: CoreContext.rendererVersion,
-        }
-      },
-      updateMask: ['composition.studioSdk.version', 'composition.studioSdk.rendererUrl'],
-    })
-  }
 
   await CoreContext.clients.LiveApi().project.startProjectBroadcast({
     collectionId: project.videoApi.project.collectionId,

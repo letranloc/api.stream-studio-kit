@@ -111,7 +111,7 @@ export const init = async (
   CoreContext.logLevel = logLevel
   CoreContext.Request = await import('./requests')
   CoreContext.Command = await import('./commands')
-  CoreContext.rendererVersion = useLatestRenderer ? 'latest' : CoreContext.version
+  CoreContext.rendererVersion = useLatestRenderer ? 'latest-v2' : CoreContext.version
 
   // Tie context to global scope for debugging purposes
   window.__StudioKit = {
@@ -542,6 +542,30 @@ const load = async (
   })
 
   user = getBaseUser()
+
+  // TODO : Enable this when the migration work is fully done
+
+  // if (result.projects.length) {
+      /** Migrate Layout is exported from ./helpers/database.ts */
+  //   const { internalProject } = await migrateLayout(
+  //     result.projects[0].id,
+  //     result.projects[0]?.compositor?.getRoot(),
+  //   )
+  //   if (internalProject) {
+  //     const updatedProjects = result.projects.map((x: InternalProject) => {
+  //       if (x.id !== internalProject.id) return x
+  //       return internalProject
+  //     })
+
+  //     setAppState({
+  //       projects: updatedProjects,
+  //       user: result.user,
+  //       sources: result.sources,
+  //       activeProjectId: null,
+  //     })
+  //   }
+  // }
+
   trigger('UserLoaded', user)
   return user
 }

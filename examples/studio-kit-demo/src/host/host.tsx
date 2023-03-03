@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * -------------------------------------------------------------------------------------------- */
 import React, { useEffect, useRef, useState } from 'react'
-import { init, Helpers } from '../../../../'
+import { init, Helpers } from '@api.stream/studio-kit'
 import { Participants } from '../shared/participant'
 import { ControlPanel, DeviceSelection } from '../shared/control-panel'
 import { DEFAULT_LAYOUT, getLayout, layouts } from './layout-examples'
@@ -147,7 +147,7 @@ const Project = () => {
   const [banners, setBanners] = React.useState<Banner[]>(
     studio.compositor.getSources('Banner'),
   )
-
+  const [loop, setLoop] = useState(true)
   const [projectedLoaded, setProjectedLoaded] = useState(false)
   // Get custom layout name from metadata we store
   const layout = project.props.layout
@@ -207,6 +207,18 @@ const Project = () => {
       if (event === 'VideoTimeUpdate') {
         console.log(payload)
       }
+    })
+  }, [])
+
+  React.useEffect(() => {
+    return projectCommands.useLayerState('Background', (props) => {
+      console.log(props)
+    })
+  }, [])
+
+  React.useEffect(() => {
+    return projectCommands.useLayerState('Overlay', (props) => {
+      console.log(props)
     })
   }, [])
 
@@ -312,21 +324,63 @@ const Project = () => {
                   <li
                     key={overlay.id}
                     onClick={() => {
-                      if (selectedImage !== overlay.id) {
-                        setSelectedImage(overlay.id)
-                        projectCommands.addImageOverlay2(overlay.id, {
-                          src: overlay.url,
-                        })
-                      } else {
-                        projectCommands.removeImageOverlay2(selectedImage)
-                        setSelectedImage(null)
-                      }
+                      //   if (selectedImage !== overlay.id) {
+                      setSelectedImage(overlay.id)
+                      projectCommands.addImageOverlay(overlay.id, {
+                        src: overlay.url,
+                      })
+                      // } else {
+                      //   projectCommands.removeImageOverlay2()
+                      //   setSelectedImage(null)
+                      // }
                     }}
                   >
                     <img width="40px" height="50px" src={overlay.url} />
                   </li>
                 ))}
               </ul>
+              <input
+                type="button"
+                value="Remove Image Overlay"
+                onClick={() => {
+                  projectCommands.removeImageOverlay()
+                }}
+              />
+              <input
+                type="button"
+                value="Remove Video Overlay"
+                onClick={() => {
+                  projectCommands.removeVideoOverlay()
+                }}
+              />
+              <input
+                type="button"
+                value="Remove Custom Overlay"
+                onClick={() => {
+                  projectCommands.removeCustomOverlay()
+                }}
+              />
+              <input
+                type="button"
+                value="Get Image Overlay"
+                onClick={() => {
+                  console.log(projectCommands.getImageOverlay())
+                }}
+              />
+              <input
+                type="button"
+                value="Get Video Overlay"
+                onClick={() => {
+                  console.log(projectCommands.getVideoOverlay())
+                }}
+              />
+              <input
+                type="button"
+                value="Get Custom Overlay"
+                onClick={() => {
+                  console.log(projectCommands.getCustomOverlay())
+                }}
+              />
             </span>
           </div>
           <div>
@@ -337,18 +391,24 @@ const Project = () => {
                   <li
                     key={overlay.id}
                     onClick={() => {
-                      if (selectedVideo !== overlay.id) {
-                        setSelectedVideo(overlay.id)
-                        projectCommands.addVideoOverlay2(overlay.id, {
-                          src: overlay.url,
-                          loop: true,
-                        })
-                      } else {
-                        projectCommands.removeVideoOverlay2(selectedVideo)
-                        setSelectedVideo(null)
-                      }
+                      setSelectedVideo(overlay.id)
+                      projectCommands.addVideoOverlay(overlay.id, {
+                        src: overlay.url,
+                        loop: true,
+                      })
                     }}
                   >
+                    <input
+                      type="checkbox"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        projectCommands.updateVideoOverlayProps(overlay.id, {
+                          loop: !loop,
+                        })
+                        setLoop(!loop)
+                      }}
+                      value="SetLoop"
+                    />
                     <video width="40px" height="50px" src={overlay.url} />
                   </li>
                 ))}
@@ -363,20 +423,29 @@ const Project = () => {
                   <li
                     key={logo.id}
                     onClick={() => {
-                      if (selectedImage !== logo.id) {
-                        setSelectedImage(logo.id)
-                        projectCommands.addLogo(logo.id, {
-                          src: logo.url,
-                        })
-                      } else {
-                        projectCommands.removeLogo(selectedImage)
-                        setSelectedImage(null)
-                      }
+                      setSelectedImage(logo.id)
+                      projectCommands.addLogo(logo.id, {
+                        src: logo.url,
+                      })
                     }}
                   >
                     <img width="40px" height="50px" src={logo.url} />
                   </li>
                 ))}
+                <input
+                  type="button"
+                  value="Remove Logo"
+                  onClick={() => {
+                    projectCommands.removeLogo()
+                  }}
+                />
+                <input
+                  type="button"
+                  value="Get Logo"
+                  onClick={() => {
+                    console.log(projectCommands.getLogo())
+                  }}
+                />
               </ul>
             </span>
           </div>
@@ -408,20 +477,44 @@ const Project = () => {
               onChange={(e) => {
                 if (/\.(gif|jpe?g|tiff?|png|webp|bmp)$/i.test(e.target.value)) {
                   //          projectCommands.setBackgroundImage(e.target.value)
-                  projectCommands.setBackgroundImage2(generateId(), {
+                  projectCommands.setBackgroundImage(generateId(), {
                     src: e.target.value,
                   })
                 } else {
                   //            projectCommands.setBackgroundVideo(e.target.value)
-                  // projectCommands.setBackgroundVideo2(generateId(), {
+                  // projectCommands.setBackgroundVideo(generateId(), {
                   //   src: e.target.value,
+                  //   loop: true,
                   // })
+
                   projectCommands.addCustomOverlay(generateId(), {
-                    src: e.target.value,
-                    width: '1920px',
-                    height: '1080px',
+                    src: 'https://rainmaker.gg/overlay/609c76dcae6381152444d16d5709fe62/12',
+                    width: 1920,
+                    height: 1080,
                   })
+
+                  // projectCommands.addCustomOverlay(generateId(), {
+                  //   src: 'https://rainmaker.gg/overlay/609c76dcae6381152444d16d5709fe62/12',
+                  //   width: 1920,
+                  //   height: 1080,
+                  // })
                 }
+              }}
+            />
+            <input
+              type="button"
+              defaultValue="Remove Background"
+              onClick={() => {
+                const backgroundVideo = projectCommands.removeBackgroundImage()
+                console.log(backgroundVideo)
+              }}
+            />
+            <input
+              type="button"
+              defaultValue="Clear"
+              onClick={() => {
+                const backgroundVideo = projectCommands.getBackgroundMedia()
+                console.log(backgroundVideo)
               }}
             />
           </div>

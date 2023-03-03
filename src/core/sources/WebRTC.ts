@@ -11,7 +11,7 @@ type SourceDeclaration = Compositor.Source.SourceDeclaration
 export type RoomParticipantSource = {
   // Equivalent to room participantId
   id: string
-  value: MediaStream | MediaStreamTrack
+  value: MediaStream
   props: {
     // Equivalent to room participantId
     id: string
@@ -31,7 +31,7 @@ export type RoomParticipantSource = {
     participantId: string
 
     trackId: string
-    
+
     microphone?: SDK.Track
   }
 }
@@ -45,7 +45,12 @@ export const RoomParticipant = {
     videoEnabled: {},
     audioEnabled: {},
   },
-  init({ addSource, removeSource, updateSource, getSource }) {
+  init({
+    addSource,
+    removeSource,
+    updateSource,
+    getSource,
+  }) {
     CoreContext.on('RoomJoined', ({ room }) => {
       let listeners = {} as { [id: string]: Function }
       let previousTracks = [] as SDK.Track[]
@@ -60,6 +65,7 @@ export const RoomParticipant = {
           .filter((p) => p?.type === 'camera' && p?.isExternal === true)
           .forEach((track) => {
             if (track.type === 'camera') {
+              const srcObject = participantStreams[track.id]
               const participant = room.getParticipant(track.participantId)
               const webcamTrack = room.getTrack(track.id)
               const source = getSource(track?.id)
@@ -67,6 +73,12 @@ export const RoomParticipant = {
                 const microphoneTrack = room.getTrack(
                   participant?.meta[track.id]?.microphone,
                 )
+                // Replace the tracks on the existing MediaStream
+                updateMediaStreamTracks(srcObject, {
+                  video: webcamTrack?.mediaStreamTrack,
+                  audio: microphoneTrack?.mediaStreamTrack,
+                })
+
                 updateSource(track.id, {
                   videoEnabled: Boolean(webcamTrack && !webcamTrack.isMuted),
                   audioEnabled: Boolean(
@@ -114,7 +126,7 @@ export const RoomParticipant = {
           updateMediaStreamTracks(srcObjectScreenshare, {
             video: screenshareTrack?.mediaStreamTrack,
           })
-          
+
           updateSource(x.id, {
             videoEnabled: Boolean(webcamTrack && !webcamTrack.isMuted),
             audioEnabled: Boolean(microphoneTrack && !microphoneTrack.isMuted),
@@ -136,7 +148,9 @@ export const RoomParticipant = {
       room.useTracks((tracks) => {
         // Get tracks not contained in previousTracks
         const newTracks = tracks.filter(
-          (track) => !previousTracks.some((x) => x.id === track.id),
+          (track) =>
+            !previousTracks.some((x) => x.id === track.id) &&
+            Boolean(track?.mediaStreamTrack),
         )
         // Get previous tracks not contained in current tracks
         const removedTracks = previousTracks.filter(
@@ -147,30 +161,26 @@ export const RoomParticipant = {
         previousTracks = tracks.filter((t) => Boolean(t?.mediaStreamTrack))
 
         newTracks.forEach((x) => {
-          const { mediaStreamTrack, id, participantId, type } = room.getTrack(
+          const srcObject = new MediaStream([])
+          participantStreams[x.id] = srcObject
+          const { id, participantId, type, mediaStreamTrack } = room.getTrack(
             x.id,
           )
 
-          const source = {
-            id,
-            isActive: true,
-            value: mediaStreamTrack,
-            props: {
-              id,
-              trackId: id,
-              participantId,
-              isMuted: x.isMuted,
-              type,
-            },
-          } as Compositor.Source.NewSource
-
           // Add each new track as a source
           if (mediaStreamTrack) {
-            if (mediaStreamTrack.kind === 'video') {
-              addSource(source)
-            } else {
-              addSource(source)
-            }
+            addSource({
+              id,
+              isActive: true,
+              value: srcObject,
+              props: {
+                id,
+                trackId: id,
+                participantId,
+                isMuted: x.isMuted,
+                type,
+              },
+            } as Compositor.Source.NewSource)
           }
         })
 
@@ -179,7 +189,6 @@ export const RoomParticipant = {
           removeSource(x.id)
           listeners[x.id]?.()
         })
-
         updateParticipants()
       })
 

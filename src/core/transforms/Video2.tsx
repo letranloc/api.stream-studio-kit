@@ -175,7 +175,7 @@ export const Video2 = {
           duration={400}
         >
           <div
-            style={{ opacity: startAnimation ? 1 : 0 }}
+            style={{ opacity: startAnimation ? 1 : 0, width: '100%', height: '100%' }}
             className={`video-transition`}
           >
             {src && (
