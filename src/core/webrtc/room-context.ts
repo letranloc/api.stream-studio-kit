@@ -6,18 +6,18 @@ import * as LiveKitServer from '@api.stream/livekit-server-sdk'
 import { ApiStream, LiveKitUtils } from '@api.stream/sdk'
 import decode from 'jwt-decode'
 import {
-  connect,
+  AudioTrack,
+  ConnectionState,
+  DataPacket_Kind,
+  LogLevel,
+  Participant,
   ParticipantEvent,
   RemoteParticipant,
   Room,
   RoomConnectOptions,
   RoomEvent,
-  Participant,
-  DataPacket_Kind,
-  ConnectOptions,
-  AudioTrack,
-  RoomState,
-  RemoteParticipant,
+  setLogLevel,
+  VideoPresets,
 } from 'livekit-client'
 import { hasPermission, Permission } from '../../helpers/permission'
 import { CoreContext, log } from '../context'
@@ -141,7 +141,7 @@ export interface LSRoomContext {
    * Must be done before connecting in order to do admin actions.
    */
   bindApiClient: (client: ApiStream) => void
-  connect: (options?: ConnectOptions) => Promise<Room>
+  connect: (options?: RoomConnectOptions) => Promise<void>
   /**
    * Array of chat messages in ascending chronological order
    */
@@ -693,11 +693,8 @@ export class RoomContext implements LSRoomContext {
       if (this.isConnecting) return
       this.isConnecting = true
 
-      setLogLevel(CoreContext.logLevel as any);
-
       // Fetch token
-      this.livekitRoom = await connect(`wss://${this._baseUrl}`, this._jwt, {
-        logLevel: CoreContext.logLevel as any,
+      await this.livekitRoom.connect(`wss://${this._baseUrl}`, this._jwt, {
         ...options,
       })
 
