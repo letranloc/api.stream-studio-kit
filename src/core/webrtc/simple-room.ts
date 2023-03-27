@@ -516,9 +516,9 @@ export const getRoom = (id: string) => {
     },
     sendData: (data, recipientIds) => {
       const encoded = encoder.encode(JSON.stringify(data))
-      const participants = recipientIds?.map(
-        (x) => room.livekitRoom?.getParticipantByIdentity(x).sid,
-      )
+      const participants = recipientIds
+        ?.map((x) => room.livekitRoom?.getParticipantByIdentity(x)?.sid)
+        .filter(Boolean)
       return localParticipant.publishData(
         encoded,
         DataPacket_Kind.RELIABLE,
